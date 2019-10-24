@@ -11,7 +11,7 @@
  *  B-9000 Gent, Belgium
  *
  *         File: NodeManager.h
- *      Created: 2019-10-16
+ *      Created: 2019-10-21
  *       Author: Geoffrey Ottoy
  *      Version: 0.1
  *
@@ -22,16 +22,12 @@
  *  License (T.B.D.)
  */
 
-#ifndef __NODE_MANAGER_H__
-#define __NODE_MANAGER_H__
+#ifndef __NON_VOLATILE_CONFIG_H__
+#define __NON_VOLATILE_CONFIG_H__
 
 #include <Arduino.h>
-#include <RTCZero.h>
-#include "Sensor.h"
 
 #define AT_COMMAND_MAX_SIZE 32
-
-#define SerialAT SerialUSB
 
 typedef struct metricSettings{
     uint16_t pollInterval;
@@ -57,29 +53,22 @@ typedef enum configFields{
     sensorConfThresholdHigh
 } SensorConfigField_t;
 
-class NodeManager{
+class NonVolatileConfig{
 
 public:
-    // constructor - id is unique identifier for the motherboard
-    NodeManager(uint16_t id);
+    // constructor
+    NonVolatileConfig(void);
 
-    // setup operation
-    //  - scans connected sensors
-    //  - configures lorawan modem
-    //  - start timers
-    //  - etc.
+    // destructor needed? e.g. memory free when in "normal operation = sensors are configured"
+
+    // needed?
     void begin(void);
-
-    void runConfigMode(bool forever=false);
-
-    // main operation
-    void loop(void);
-
-private:
-    void processAtCommands(void);
 
     // read complete configuration from non-volatile memory
     bool readSensorConfig(void);
+
+private:
+
 
     // store complete sensor configuration / will overwrite existing configs
     bool storeSensorConfig(uint8_t nrSensors, SensorConfig_t * config);
@@ -98,31 +87,15 @@ private:
 
     void printSensorConfig(void);
 
-    // motherboard id
-    uint16_t id;    // as 16-bit unsigned integer
-    char idStr[5];  // as string (4-digit hex)
+    uint16_t id;
+    char idStr[5];
 
-    // connected sensors
     uint8_t nrSensors;
-    Sensor * sensorList;
-
-    // AT command processing
-    char atCommand[AT_COMMAND_MAX_SIZE];     // a String to hold incoming data
-    uint8_t atFill;
-    bool commandReceived;   // whether the string is complete
 
     // for testing only? keep settings in RAM
     SensorConfig_t * sensorConfigSettings;
-
-    unsigned long atStartTime;
-    bool conFigMode;
-    bool atTimerEnabled;
-
-    
-    RTCZero * rtc;
-    uint8_t seconds;
 };
 
 
 
-#endif /*__NODE_MANAGER_H__*/
+#endif /*__NON_VOLATILE_CONFIG_H__*/

@@ -23,10 +23,21 @@
  */
 
 #include <FlashAsEEPROM.h>
+#include <Wire.h>
 #include "NodeManager.h"
 
-#define MAX_NR_SENSORS                  8
+// Maximum number of sensors that is being supported
+#define MAX_NR_OF_SENSORS               8
 
+// List of interrupt pins
+// TODO
+
+// Address range that is used to scan for sensors 
+#define SENSOR_IIC_BASE_ADDRESS         0x60
+#define SENSOR_IIC_END_ADDRESS          0x6F
+
+// Non-Volatile storage offsets
+#define NR_SENSORS_OFFSET               0
 #define SENSOR_CONFIG_I2C_OFFSET        2
 #define SENSOR_CONFIG_TYPE_OFFSET       3
 #define SENSOR_CONFIG_NRSET_OFFSET      4
@@ -37,27 +48,21 @@
 #define SENSOR_CONFIG_TH_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+5)
 #define SENSOR_CONFIG_SETTTINGS_SIZE    7
 
-#define NR_SENSORS_OFFSET               0
 
-bool wakeup = false;
-
-static void rtcCallback(void){
-    wakeup = true;
-}
 
 void DUMP_EEPROM(int size){
-    Serial.println("EEPROM DUMP");
+    SerialAT.println("EEPROM DUMP");
     for(int i=0; i<size; i++){
-        Serial.print("A: ");
-        Serial.print(i, HEX);
-        Serial.print(" - ");
-        Serial.println(EEPROM.read(i), HEX);
+        SerialAT.print("A: ");
+        SerialAT.print(i, HEX);
+        SerialAT.print(" - ");
+        SerialAT.println(EEPROM.read(i), HEX);
     }
 }
 
 NodeManager::NodeManager(uint16_t id){
 
-//#warning "NodeManager class uses Serial."
+//#warning "NodeManager class uses SerialAT."
 
     this->id = id;
     sprintf(this->idStr, "%04X", id);
@@ -68,22 +73,20 @@ NodeManager::NodeManager(uint16_t id){
     this->sensorConfigSettings = NULL;
 
     this->atTimerEnabled = true;
-    this->lowPowerOperation = false;
-    this->startLowPower = true;
-    this->rtc = new RTCZero();
+    this->conFigMode = true;
 }
 
 void NodeManager::begin(void){
-    Serial.println("Initializing NodeManager...");
+    SerialAT.println("Initializing NodeManager...");
 
     if(this->readSensorConfig()){
-        Serial.println("Previous configuration found.");
+        SerialAT.println("Previous configuration found.");
         // print config
         this->printSensorConfig();
     }
     else{
         // write config for debug purposes
-        Serial.println("No configuration stored yet.");
+        SerialAT.println("No configuration stored yet.");
         EEPROM.write(0, 2);
 
         SensorConfig_t c;
@@ -104,8 +107,8 @@ void NodeManager::begin(void){
 
         int size = 0;
         this->storeSensorConfig(1, c, &size);
-        Serial.print("bytes stored: ");
-        Serial.println(size);
+        SerialAT.print("bytes stored: ");
+        SerialAT.println(size);
 
         c.i2cAddress = 0x61;
         c.type = 0x21;
@@ -113,50 +116,79 @@ void NodeManager::begin(void){
         c.settings = NULL;
 
         this->storeSensorConfig(1+size, c, &size);
-        Serial.print("bytes stored: ");
-        Serial.println(size);
+        SerialAT.print("bytes stored: ");
+        SerialAT.println(size);
 
         DUMP_EEPROM(32);
+
     }
 
-    this->rtc->begin();
-    this->rtc->attachInterrupt(rtcCallback);
     this->atStartTime = millis();
-    Serial.println("Done\n");
+
+    // merge
+    // Initialize I2C bus
+    delay(500);
+    Wire.begin();
+    Wire.setClock(100000);
+    Wire.setTimeout(500);
+
+    uint8_t detectedSensors[MAX_NR_OF_SENSORS];
+    uint8_t detectedCount = 0;
+    Sensor * t =  new Sensor(); // temporary sensor object for interfacing with the bus
+
+    // test all addresses for a response
+    for(uint8_t i =0; i<MAX_NR_OF_SENSORS; i++){
+        uint8_t address = SENSOR_IIC_BASE_ADDRESS + i;
+        if(t->pollAddress(address)){
+        SerialAT.print("Found sensor at: 0x");
+        SerialAT.println(address, HEX);
+        detectedSensors[detectedCount++] = address;
+        }
+    }
+    SerialAT.println("Trying delete temporary sensor object...");
+    delay(1000);
+    delete t;
+    this->nrSensors = detectedCount;
+    SerialAT.println("OK");
+
+    // Create list of sensors
+    this->sensorList = new Sensor[this->nrSensors];
+    // and initialize this list
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        if(!this->sensorList[i].init(detectedSensors[i])){
+        SerialAT.print("Failed to initialize sensor at address: 0x");
+        SerialAT.println(detectedSensors[i], HEX);
+        }
+        delay(20);
+    }
+
+    SerialAT.println("Done\n");
 }
 
-void NodeManager::loop(void){
-    // disable at commands after 10000
-    if(this->atTimerEnabled){
-        if(millis() - this->atStartTime > 10000){
-            this->lowPowerOperation = true;
-            this->atTimerEnabled = false;
+void NodeManager::runConfigMode(bool forever){
+    while(this->conFigMode || forever){
+        // disable at commands after 10000
+        if(this->atTimerEnabled){
+            if(millis() - this->atStartTime > 10000){
+                this->conFigMode = false;
+            }
         }
-    }
 
-    // low power operation
-    if(this->lowPowerOperation){
-        if(this->startLowPower){
-            this->startLowPower = false;
-            // start rtc
-        }
-        else{
-
-        }
-        delay(1000); // nothing low-power here
-        Serial.println("sleep");
-    }
-    // parse at commands
-    else{
         this->processAtCommands();
     }
 }
 
+void NodeManager::loop(void){
+    // low-power loop (but not right now)
+    delay(1000); 
+    SerialAT.println("sleep");
+}
+
 void NodeManager::processAtCommands(void){
     // receive characters
-    while(Serial.available()) {
+    while(SerialAT.available()) {
         // get the new byte:
-        char atChar = (char)Serial.read();
+        char atChar = (char)SerialAT.read();
         // add it to the buffer
         if(this->atFill < AT_COMMAND_MAX_SIZE){
             this->atCommand[this->atFill++] = atChar;
@@ -177,31 +209,30 @@ void NodeManager::processAtCommands(void){
 
             // Ping motherboard
             if(strstr(specific, "CLS")){
-                Serial.println("OK");
+                SerialAT.println("OK");
                 commandProcessed = true;
-                this->lowPowerOperation = true;
-                this->atTimerEnabled = false;
+                this->conFigMode = false;
             }
 
             // Ping motherboard
             if(strstr(specific, "PNG?")){
-                Serial.print("+PNG: ");
-                Serial.println(this->idStr);
+                SerialAT.print("+PNG: ");
+                SerialAT.println(this->idStr);
                 commandProcessed = true;
             }
 
             // List sensors 
             if(strstr(specific, "LS?")){
-                Serial.print("+LS: ");
+                SerialAT.print("+LS: ");
                 char atOut[5];
                 for(uint8_t i=0; i<this->nrSensors; i++){
                     if(i>0){
-                        Serial.print(" ");
+                        SerialAT.print(" ");
                     }
                     sprintf(atOut, "%02X%02X", (uint8_t)(i+1), this->sensorConfigSettings[i].type);
-                    Serial.print(atOut);
+                    SerialAT.print(atOut);
                 }
-                Serial.println();
+                SerialAT.println();
                 commandProcessed = true;
             }
 
@@ -215,8 +246,8 @@ void NodeManager::processAtCommands(void){
                 if(id < this->nrSensors){
                     if(metric<this->sensorConfigSettings[id].nrSettings){
                         // poll interval for (id, metric)
-                        Serial.print("+POL: ");
-                        Serial.println(this->sensorConfigSettings[id].settings[metric].pollInterval);
+                        SerialAT.print("+POL: ");
+                        SerialAT.println(this->sensorConfigSettings[id].settings[metric].pollInterval);
                         commandProcessed = true;
                     }
                 }
@@ -236,7 +267,7 @@ void NodeManager::processAtCommands(void){
                     if(metric<this->sensorConfigSettings[id].nrSettings){
                         this->sensorConfigSettings[id].settings[metric].pollInterval = pol;
                         if(this->storeSensorConfigField(id, pol, sensorConfPollInterval, metric)){
-                            Serial.println("OK");
+                            SerialAT.println("OK");
                             status = true;
                         }
                     }
@@ -255,12 +286,12 @@ void NodeManager::processAtCommands(void){
                 if(id < this->nrSensors){
                     if(metric<this->sensorConfigSettings[id].nrSettings){
                         // threshol settings for (id, metric)
-                        Serial.print("+TH: ");
-                        Serial.print(this->sensorConfigSettings[id].settings[metric].thresholdEnabled);
-                        Serial.print(" ");
-                        Serial.print(this->sensorConfigSettings[id].settings[metric].thresholdLow);
-                        Serial.print(" ");
-                        Serial.println(this->sensorConfigSettings[id].settings[metric].thresholdHigh);
+                        SerialAT.print("+TH: ");
+                        SerialAT.print(this->sensorConfigSettings[id].settings[metric].thresholdEnabled);
+                        SerialAT.print(" ");
+                        SerialAT.print(this->sensorConfigSettings[id].settings[metric].thresholdLow);
+                        SerialAT.print(" ");
+                        SerialAT.println(this->sensorConfigSettings[id].settings[metric].thresholdHigh);
                         commandProcessed = true;
                     }
                 }
@@ -280,7 +311,7 @@ void NodeManager::processAtCommands(void){
                     if(metric<this->sensorConfigSettings[id].nrSettings){
                         this->sensorConfigSettings[id].settings[metric].thresholdEnabled = enabled;
                         if(this->storeSensorConfigField(id, enabled, sensorConfThresholdEnabled, metric)){
-                            Serial.println("OK");
+                            SerialAT.println("OK");
                             status = true;
                         }
                     }
@@ -304,7 +335,7 @@ void NodeManager::processAtCommands(void){
                     if(metric<this->sensorConfigSettings[id].nrSettings){
                         this->sensorConfigSettings[id].settings[metric].thresholdLow = tll;
                         if(this->storeSensorConfigField(id, tll, sensorConfThresholdLow, metric)){
-                            Serial.println("OK");
+                            SerialAT.println("OK");
                             status = true;
                         }
                     }
@@ -327,7 +358,7 @@ void NodeManager::processAtCommands(void){
                     if(metric<this->sensorConfigSettings[id].nrSettings){
                         this->sensorConfigSettings[id].settings[metric].thresholdHigh = tlh;
                         if(this->storeSensorConfigField(id, tlh, sensorConfThresholdHigh, metric)){
-                            Serial.println("OK");
+                            SerialAT.println("OK");
                             status = true;
                         }
                     }
@@ -338,7 +369,7 @@ void NodeManager::processAtCommands(void){
         }
 
         if(!commandProcessed){
-            Serial.println("ERROR");
+            SerialAT.println("ERROR");
         }
 
         this->atTimerEnabled = false;
@@ -354,7 +385,7 @@ void NodeManager::processAtCommands(void){
 /***/
 // store complete sensor configuration / will overwrite existing configs
 bool NodeManager::storeSensorConfig(uint8_t nrSensors, SensorConfig_t * config){
-    if(nrSensors > MAX_NR_SENSORS){
+    if(nrSensors > MAX_NR_OF_SENSORS){
         return false;
     }
     if(config == NULL){
@@ -557,7 +588,7 @@ bool NodeManager::readSensorConfig(void){
 
     this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
     if(this->sensorConfigSettings == NULL){
-        Serial.println("Malloc failed.");
+        SerialAT.println("Malloc failed.");
     }
 
     int offset;
@@ -577,7 +608,7 @@ bool NodeManager::readSensorConfig(void){
         // allocate space to store the settings
         this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrSettings);
         if(this->sensorConfigSettings[i].settings == NULL){
-            Serial.println("Malloc settings failed.");
+            SerialAT.println("Malloc settings failed.");
             return false;
         }
 
@@ -607,29 +638,29 @@ bool NodeManager::readSensorConfig(void){
 }
 
 void NodeManager::printSensorConfig(void){
-    Serial.print("Nr sensors: ");
-    Serial.println(this->nrSensors);
+    SerialAT.print("Nr sensors: ");
+    SerialAT.println(this->nrSensors);
 
     for(int i=0; i<nrSensors; i++){
-        Serial.print(" * Sensor ");
-        Serial.println(i);
-        Serial.print("    - i2c: ");
-        Serial.println(this->sensorConfigSettings[i].i2cAddress, HEX);
-        Serial.print("    - type: ");
-        Serial.println(this->sensorConfigSettings[i].type, HEX);
-        Serial.print("    - metrics: ");
-        Serial.println(this->sensorConfigSettings[i].nrSettings);
+        SerialAT.print(" * Sensor ");
+        SerialAT.println(i);
+        SerialAT.print("    - i2c: ");
+        SerialAT.println(this->sensorConfigSettings[i].i2cAddress, HEX);
+        SerialAT.print("    - type: ");
+        SerialAT.println(this->sensorConfigSettings[i].type, HEX);
+        SerialAT.print("    - metrics: ");
+        SerialAT.println(this->sensorConfigSettings[i].nrSettings);
         for(int j=0; j<this->sensorConfigSettings[i].nrSettings; j++){
-            Serial.print("    - m");
-            Serial.print(j);
-            Serial.print(" ");
-            Serial.print(this->sensorConfigSettings[i].settings[j].pollInterval);
-            Serial.print(" ");
-            Serial.print(this->sensorConfigSettings[i].settings[j].thresholdEnabled);
-            Serial.print(" ");
-            Serial.print(this->sensorConfigSettings[i].settings[j].thresholdLow);
-            Serial.print(" ");
-            Serial.println(this->sensorConfigSettings[i].settings[j].thresholdHigh);
+            SerialAT.print("    - m");
+            SerialAT.print(j);
+            SerialAT.print(" ");
+            SerialAT.print(this->sensorConfigSettings[i].settings[j].pollInterval);
+            SerialAT.print(" ");
+            SerialAT.print(this->sensorConfigSettings[i].settings[j].thresholdEnabled);
+            SerialAT.print(" ");
+            SerialAT.print(this->sensorConfigSettings[i].settings[j].thresholdLow);
+            SerialAT.print(" ");
+            SerialAT.println(this->sensorConfigSettings[i].settings[j].thresholdHigh);
         }
     }
 }

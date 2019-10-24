@@ -1,20 +1,37 @@
 #include <Arduino.h>
+#include <Wire.h>
 #include "NodeManager.h"
+#include "LoRaWAN.h"
+#include "RN2483_Modem.h"
 
-#define MOTHERBOARD_ID 0x474F
+#include "device_settings.h"
 
 NodeManager nm(MOTHERBOARD_ID);
 
+LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
+
+uint8_t testdata[4] = {0x47, 0x4f, 00, 00};
+
 void setup() {
-  Serial.begin(115200);
-  delay(4000);
+  // USB Serial for configuration
+  SerialAT.begin(115200); 
+  
+  // configure lora (no networking yet)
+  lora.begin(settings);
 
   // put your setup code here, to run once:
   nm.begin();
+  //nm.runConfigMode(); // run config
+  nm.runConfigMode(true); // run config forever
 
+  // join lora network
+  lora.join();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
   nm.loop();
+
+  //lora.sendData(testdata, 4);
+  //testdata[3]++;
 }

@@ -27,18 +27,16 @@
 #include <Sensor.h>
 
 #define POLL_RETRIES  2
-#define POLL_ACK      0xAA
 
-// Commands to interface with the sensors
+#define DEFAULT_ACK                 0xAA
+
+// i2c slave device commands
 #define CMD_POLL                    0x10 // see if a sensor responds
-#define CMD_DEVICE_TYPE             0x20 // request the sensor device type
-#define CMD_INT_TOGGLE              0x30 // request toggle (on the sensor of interrupt line)
-#define CMD_GET_M_DATA_LEN          0x40 // check how many bytes/measurement we get from this sensor
-#define CMD_GET_M_DATA              0x41 // get measurement
-#define CMD_GET_C_DATA_LEN          0x50 // check how many bytes of control data we can send
-#define CMD_SET_C_DATA              0x51 // send control bytes (e.g. treshold levels)
-#define CMD_START_MEASUREMENT       0x60 // start a measurement
-#define CMD_GET_READY               0x61 // check if sensor measurement data is ready
+#define CMD_DEVICE_TYPE             0x11 // request the sensor device type
+#define CMD_INT_TOGGLE              0x15 // request toggle (on the sensor of interrupt line)
+#define CMD_GET_M_NR                0x23 // get nr. of metrics
+#define CMD_GET_M_DATA              0x14 // get measurement
+#define CMD_START_MEASUREMENT       0x13 // get/start a measurement
 
 /******************************************************************************
  * Static functions (IIC communication)
@@ -117,7 +115,6 @@ Sensor::Sensor(void){
   this->sensorType = 0;
 
   this->mLen = 0;
-  this->cLen = 0;
   this->mData = NULL;
 
   this->_numErrors = 0;
@@ -130,7 +127,7 @@ bool Sensor::pollAddress(uint8_t iicAddress){
   uint8_t pollResponse = 0x00;
   do{ // POLL sensor
     if(readSensorData(iicAddress, CMD_POLL, &pollResponse, 1)){
-      if(pollResponse==POLL_ACK){
+      if(pollResponse==DEFAULT_ACK){
         /*Serial.print("Sensor at address: 0x");
         Serial.println(iicAddress, HEX);*/
         
@@ -155,18 +152,15 @@ bool Sensor::init(uint8_t iicAddress){
   }
 
   // request the rx len (will update this->_mLen )
-  if(!this->requestRxLen()){
+  if(!this->requestNrMetrics()){
     // something went wrong
     return false;
   }
 
-  // request the tx len (will update this->_cLen )
-  if(!this->requestTxLen()){
-    // something went wrong
-    return false;
-  }
+  // set length of al measurements combined
+  this->mLen = this->nrMetrics * 2;
 
-  // allocate memory to store rx data
+  // allocate memory to store sensor data
   this->mData = (uint8_t *) malloc(this->mLen * sizeof(uint8_t));
 
   return true;
@@ -181,7 +175,7 @@ bool Sensor::toggleInterrupt(void){
   if(!writeSensorData(this->iicAddress, CMD_INT_TOGGLE, &ack, 1)){
     return false;
   }
-  return (bool)(ack == POLL_ACK);
+  return (bool)(ack == DEFAULT_ACK);
 }
 
 bool Sensor::startMeasurement(void){
@@ -189,7 +183,7 @@ bool Sensor::startMeasurement(void){
   if(!writeSensorData(this->iicAddress, CMD_START_MEASUREMENT, &ack, 1)){
     return false;
   }
-  return (bool)(ack == POLL_ACK);
+  return (bool)(ack == DEFAULT_ACK);
 }
 
 bool Sensor::requestMeasurementData(void){
@@ -198,7 +192,7 @@ bool Sensor::requestMeasurementData(void){
   uint8_t tempData[this->mLen];
 
   bool rv = readSensorData(this->iicAddress, CMD_GET_M_DATA, tempData, this->mLen);
-  Serial.print("sensor->_mData:");
+  /*Serial.print("sensor->_mData:");
   for(uint8_t i=0; i<this->mLen; i++){
     if(this->mData[i] > 0x0F){
       Serial.print(" ");
@@ -208,7 +202,7 @@ bool Sensor::requestMeasurementData(void){
     }
     Serial.print(tempData[i], HEX);
   }
-  Serial.println();
+  Serial.println();*/
 
   return rv;
 }
@@ -223,7 +217,7 @@ void Sensor::copyMeasurementData(uint8_t * buf, uint8_t len){
   }
 }
 
-bool Sensor::writeControlData(uint8_t * buf, uint8_t len){
+/*bool Sensor::writeControlData(uint8_t * buf, uint8_t len){
   if(len<this->cLen){
     return writeSensorData(this->iicAddress, CMD_SET_C_DATA, buf, len);
   }
@@ -231,7 +225,7 @@ bool Sensor::writeControlData(uint8_t * buf, uint8_t len){
     return writeSensorData(this->iicAddress, CMD_SET_C_DATA, buf, this->cLen);
   }
 }
-
+*/
 
 /* Access to sensor attributes ************************************************/
 
@@ -243,14 +237,25 @@ uint8_t Sensor::getSensorType(void){
   return this->sensorType;
 }
 
-uint8_t Sensor::getRxLen(void){
-  return this->mLen;
+uint8_t Sensor::getNrMetrics(void){
+  return this->nrMetrics;
 }
 
-uint8_t Sensor::getTxLen(void){
+uint8_t Sensor::getIntPin(void){
+  return this->intPin;
+}
+
+/*uint8_t Sensor::getTxLen(void){
   return this->cLen;
+}*/
+
+void Sensor::setIntPin(uint8_t pinNr){
+  this->intPin = pinNr;
 }
 
+void Sensor::pinCb(void){
+  SerialUSB.println("cb");
+}
 
 /* Private methods ************************************************************/
 
@@ -274,18 +279,18 @@ bool Sensor::requestSensorType(void){
   return false;
 }
 
-bool Sensor::requestRxLen(void){
-  uint8_t rxLen;
-  if(!readSensorData(this->iicAddress, CMD_GET_M_DATA_LEN, &rxLen, 1)){
+bool Sensor::requestNrMetrics(void){
+  uint8_t nm;
+  if(!readSensorData(this->iicAddress, CMD_GET_M_NR, &nm, 1)){
     return false;
   }
 
-  this->mLen = rxLen;
+  this->nrMetrics = nm;
 
   return true;
 }
   
-bool Sensor::requestTxLen(void){
+/*bool Sensor::requestTxLen(void){
   uint8_t txLen;
   if(!readSensorData(this->iicAddress, CMD_GET_C_DATA_LEN, &txLen, 1)){
     return false;
@@ -294,19 +299,19 @@ bool Sensor::requestTxLen(void){
   this->cLen = txLen;
 
   return true;
-}
+}*/
   
-bool Sensor::checkReady(void){
+/*bool Sensor::checkReady(void){
   uint8_t ready = 0x00;
   if(!readSensorData(this->iicAddress, CMD_GET_READY, &ready, 1)){
-    Serial.println(ready, HEX);
+    //Serial.println(ready, HEX);
     return false;
   }
 
   if(ready == 0x01){
-    Serial.println(ready, HEX);
+    //Serial.println(ready, HEX);
     return true;
   }
 
   return false;
-}
+}*/

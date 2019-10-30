@@ -40,36 +40,39 @@ public:
 
   bool init(uint8_t iicAddress);
   bool toggleInterrupt(void);
+  void setIntPin(uint8_t pinNr);
+
+  void pinCb(void);
 
   bool startMeasurement(void);
   bool requestMeasurementData(void);
   void copyMeasurementData(uint8_t * buf, uint8_t len);
 
-  bool writeControlData(uint8_t * buf, uint8_t len);
+  //bool writeControlData(uint8_t * buf, uint8_t len);
 
   // return sensor attributes
   uint8_t getIicAddress(void);
   uint8_t getSensorType(void);
-  uint8_t getRxLen(void);
-  uint8_t getTxLen(void);
+  uint8_t getNrMetrics(void);
+  uint8_t getIntPin(void);
   
 private:
   bool requestSensorType(void);
-  bool requestRxLen(void);
-  bool requestTxLen(void);
-  bool checkReady(void);
+  bool requestNrMetrics(void);
+  //bool requestTxLen(void);
+ // bool checkReady(void);
 
 protected:
   uint8_t sensorType;
   uint8_t iicAddress;
+  uint8_t intPin;
   
-  uint8_t mLen;
-  uint8_t cLen;
-  uint8_t * mData;
+  uint8_t nrMetrics;  // nr of different metrics supported by the sensor, each metric measurement takes up 2 bytes
+  uint8_t mLen;       // (max nr of measurement bytes=) nrMetrics * 2 
+  uint8_t * mData;    // able to store max nr of measurement bytes
 
   // optional
   uint8_t _numErrors;
-
 
 };
 

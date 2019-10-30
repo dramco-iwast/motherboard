@@ -27,10 +27,7 @@
 #include "NodeManager.h"
 
 // Maximum number of sensors that is being supported
-#define MAX_NR_OF_SENSORS               8
-
-// List of interrupt pins
-// TODO
+#define MAX_NR_OF_SENSORS               6
 
 // Address range that is used to scan for sensors 
 #define SENSOR_IIC_BASE_ADDRESS         0x60
@@ -48,7 +45,37 @@
 #define SENSOR_CONFIG_TH_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+5)
 #define SENSOR_CONFIG_SETTTINGS_SIZE    7
 
+// List of interrupt pins
+uint8_t intPins[MAX_NR_OF_SENSORS] = {A3, A4, 8, 9, 38, 3};
 
+void sensor0Callback(void){
+    SerialAT.println("cb0");
+}
+void sensor1Callback(void){
+    SerialAT.println("cb1");
+}
+void sensor2Callback(void){
+    SerialAT.println("cb2");
+}
+void sensor3Callback(void){
+    SerialAT.println("cb3");
+}
+void sensor4Callback(void){
+    SerialAT.println("cb4");
+}
+void sensor5Callback(void){
+    SerialAT.println("cb5");
+}
+
+typedef void (*SensorCb)(void);
+SensorCb sensorCallbacks[MAX_NR_OF_SENSORS] = {
+    sensor0Callback,
+    sensor1Callback,
+    sensor2Callback,
+    sensor3Callback,
+    sensor4Callback,
+    sensor5Callback
+};
 
 void DUMP_EEPROM(int size){
     SerialAT.println("EEPROM DUMP");
@@ -70,97 +97,116 @@ NodeManager::NodeManager(uint16_t id){
     memset(this->atCommand, '\0', AT_COMMAND_MAX_SIZE);
     this->atFill = 0;
     this->commandReceived = false;
-    this->sensorConfigSettings = NULL;
 
     this->atTimerEnabled = true;
     this->conFigMode = true;
+
+    this->nvConfig = new NonVolatileConfig();
 }
 
 void NodeManager::begin(void){
     SerialAT.println("Initializing NodeManager...");
 
-    if(this->readSensorConfig()){
-        SerialAT.println("Previous configuration found.");
-        // print config
-        this->printSensorConfig();
-    }
-    else{
-        // write config for debug purposes
-        SerialAT.println("No configuration stored yet.");
-        EEPROM.write(0, 2);
+    DUMP_EEPROM(32);
 
-        SensorConfig_t c;
-        c.i2cAddress = 0x60;
-        c.type = 0x68;
-        c.nrSettings = 2;
-
-        MetricSettings_t s[2];
-        s[0].pollInterval = 3600;
-        s[0].thresholdEnabled = 0;
-        s[0].thresholdLow = 0;
-        s[0].thresholdHigh = 0;
-        s[1].pollInterval = 600;
-        s[1].thresholdEnabled = 1;
-        s[1].thresholdLow = 5;
-        s[1].thresholdHigh = 1000;
-        c.settings = s;
-
-        int size = 0;
-        this->storeSensorConfig(1, c, &size);
-        SerialAT.print("bytes stored: ");
-        SerialAT.println(size);
-
-        c.i2cAddress = 0x61;
-        c.type = 0x21;
-        c.nrSettings = 0;
-        c.settings = NULL;
-
-        this->storeSensorConfig(1+size, c, &size);
-        SerialAT.print("bytes stored: ");
-        SerialAT.println(size);
-
-        DUMP_EEPROM(32);
-
+    // 1. Initialize interrupts pins
+    for(uint8_t i=0; i<MAX_NR_OF_SENSORS; i++){
+        pinMode(intPins[i], INPUT_PULLUP);
     }
 
-    this->atStartTime = millis();
-
-    // merge
-    // Initialize I2C bus
+    // 2. Initialize I2C bus
     delay(500);
     Wire.begin();
     Wire.setClock(100000);
     Wire.setTimeout(500);
 
+    // 3. Build a sensor list (i.e. list of Sensor objects for interfacing with the sensor boards)
     uint8_t detectedSensors[MAX_NR_OF_SENSORS];
     uint8_t detectedCount = 0;
     Sensor * t =  new Sensor(); // temporary sensor object for interfacing with the bus
 
-    // test all addresses for a response
-    for(uint8_t i =0; i<MAX_NR_OF_SENSORS; i++){
-        uint8_t address = SENSOR_IIC_BASE_ADDRESS + i;
+    // Test all addresses for a response
+    for(uint8_t address=SENSOR_IIC_BASE_ADDRESS; address<SENSOR_IIC_END_ADDRESS+1; address++){
         if(t->pollAddress(address)){
-        SerialAT.print("Found sensor at: 0x");
-        SerialAT.println(address, HEX);
-        detectedSensors[detectedCount++] = address;
+            SerialAT.print("Found sensor at address: 0x");
+            SerialAT.println(address, HEX);
+            if(detectedCount<MAX_NR_OF_SENSORS){
+                detectedSensors[detectedCount++] = address;
+            }
+            else{
+                SerialAT.println("Maximum number of sensors exceeded");
+            }
         }
     }
-    SerialAT.println("Trying delete temporary sensor object...");
-    delay(1000);
+    // Delete temporary object
     delete t;
-    this->nrSensors = detectedCount;
-    SerialAT.println("OK");
 
-    // Create list of sensors
+    // Set number of sensors connected to the motherboard
+    this->nrSensors = detectedCount;
+
+    // Now create the actual list of sensors ...
     this->sensorList = new Sensor[this->nrSensors];
-    // and initialize this list
+    // ... and initialize this list
     for(uint8_t i=0; i<this->nrSensors; i++){
         if(!this->sensorList[i].init(detectedSensors[i])){
-        SerialAT.print("Failed to initialize sensor at address: 0x");
-        SerialAT.println(detectedSensors[i], HEX);
+            SerialAT.print("Failed to initialize sensor at address: 0x");
+            SerialAT.println(detectedSensors[i], HEX);
+        }
+        else{
+            // detect which interrupt pin the i-th sensor is connected to
+            this->sensorList[i].toggleInterrupt();
+            for(uint8_t pin=0; pin<MAX_NR_OF_SENSORS; pin++){
+                if(digitalRead(intPins[pin]) == LOW){
+                    this->sensorList[i].setIntPin(intPins[pin]);
+                    attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[i], FALLING);
+                }
+            }
+            this->sensorList[i].toggleInterrupt();
+
+            SerialAT.print("Sensor: ");
+            SerialAT.println(i+1);
+            SerialAT.print(" - type: 0x");
+            SerialAT.println(this->sensorList[i].getSensorType(), HEX);
+            SerialAT.print(" - metrics: ");
+            SerialAT.println(this->sensorList[i].getNrMetrics());
+            SerialAT.print(" - int pin: ");
+            SerialAT.println(this->sensorList[i].getIntPin());
         }
         delay(20);
     }
+
+    // 4. Read a previous configuration from EEPROM
+    SerialAT.println("Reading previous config from EEPROM ...");
+    this->nvConfig->readSensorConfig();
+    this->nvConfig->printSensorConfig();
+
+    // 5. Test if connected sensors (sensorList) match the previous configuration (nvConfig)
+    bool diffDetected = false;
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getSensorType())){
+            diffDetected = true;
+            break;
+        }
+    }
+
+    // 6. If list of sensors from the previous configuration differs from the currently installed sensors
+    // we completely discard the previous configuration and build a new one based on the sensorList
+    if(diffDetected){
+        SerialAT.println("Connected sensors don't match with previous config.");
+        SerialAT.println("Creating new config ...");
+        // discard old config
+        this->nvConfig->discardConfig();
+        // build new config (in RAM)
+        this->nvConfig->createNewConfig(this->nrSensors, this->sensorList);
+        SerialAT.println("Updating non volatile config:");
+        this->nvConfig->storeSensorConfig();
+    }
+    else{
+        SerialAT.println("Connected sensors match with previous config.");
+    }
+    this->nvConfig->printSensorConfig();
+
+    this->atStartTime = millis();
 
     SerialAT.println("Done\n");
 }
@@ -176,6 +222,15 @@ void NodeManager::runConfigMode(bool forever){
 
         this->processAtCommands();
     }
+
+    SerialAT.println("Configuring connected sensors ...");
+    SerialAT.println("Using configuration:");
+    this->nvConfig->storeSensorConfig();
+    //todo: communicate config to sensors (i.e. threshold values)
+
+    SerialAT.println("Exit config mode.");
+
+    delete this->nvConfig;
 }
 
 void NodeManager::loop(void){
@@ -229,7 +284,9 @@ void NodeManager::processAtCommands(void){
                     if(i>0){
                         SerialAT.print(" ");
                     }
-                    sprintf(atOut, "%02X%02X", (uint8_t)(i+1), this->sensorConfigSettings[i].type);
+                    uint8_t type = 0;
+                    this->nvConfig->getSensorType(i, &type);
+                    sprintf(atOut, "%02X%02X", (uint8_t)(i+1), type);
                     SerialAT.print(atOut);
                 }
                 SerialAT.println();
@@ -242,14 +299,12 @@ void NodeManager::processAtCommands(void){
                 uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
                 uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
 
-                // check if requested info is available
-                if(id < this->nrSensors){
-                    if(metric<this->sensorConfigSettings[id].nrSettings){
-                        // poll interval for (id, metric)
-                        SerialAT.print("+POL: ");
-                        SerialAT.println(this->sensorConfigSettings[id].settings[metric].pollInterval);
-                        commandProcessed = true;
-                    }
+                uint16_t pollInterval = 0;
+                // get poll interval for (id, metric)
+                if(this->nvConfig->getSensorPollInterval(id, metric, &pollInterval)){ // false if either metric or id are invalid/incorrect
+                    SerialAT.print("+POL: ");
+                    SerialAT.println(pollInterval);
+                    commandProcessed = true;
                 }
             }
 
@@ -262,18 +317,10 @@ void NodeManager::processAtCommands(void){
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t pol = strtol(nextNr, NULL, 10);
 
-                bool status = false;
-                if(id < this->nrSensors){
-                    if(metric<this->sensorConfigSettings[id].nrSettings){
-                        this->sensorConfigSettings[id].settings[metric].pollInterval = pol;
-                        if(this->storeSensorConfigField(id, pol, sensorConfPollInterval, metric)){
-                            SerialAT.println("OK");
-                            status = true;
-                        }
-                    }
+                if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfPollInterval, pol)){
+                    SerialAT.println("OK");
+                    commandProcessed = true;
                 }
-                
-                commandProcessed = status;
             }
 
             // Get sensor threshold settings
@@ -282,18 +329,18 @@ void NodeManager::processAtCommands(void){
                 uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
                 uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
 
-                // check if requested info is available
-                if(id < this->nrSensors){
-                    if(metric<this->sensorConfigSettings[id].nrSettings){
-                        // threshol settings for (id, metric)
-                        SerialAT.print("+TH: ");
-                        SerialAT.print(this->sensorConfigSettings[id].settings[metric].thresholdEnabled);
-                        SerialAT.print(" ");
-                        SerialAT.print(this->sensorConfigSettings[id].settings[metric].thresholdLow);
-                        SerialAT.print(" ");
-                        SerialAT.println(this->sensorConfigSettings[id].settings[metric].thresholdHigh);
-                        commandProcessed = true;
-                    }
+                uint8_t enabled = 0;
+                uint16_t tLevLow = 0;
+                uint16_t tLevHigh = 0;
+                // get threshold settings for (id, metric)
+                if(this->nvConfig->getSensorThresholdSettings(id, metric, &enabled, &tLevLow, &tLevHigh)){
+                    SerialAT.print("+TH: ");
+                    SerialAT.print(enabled);
+                    SerialAT.print(" ");
+                    SerialAT.print(tLevLow);
+                    SerialAT.print(" ");
+                    SerialAT.println(tLevHigh);
+                    commandProcessed = true;
                 }
             }
 
@@ -306,18 +353,12 @@ void NodeManager::processAtCommands(void){
                 char * nextNr = strchr(argStr+3, ' ');
                 uint8_t enabled = strtol(nextNr, NULL, 10);
 
-                bool status = false;
-                if(id < this->nrSensors){
-                    if(metric<this->sensorConfigSettings[id].nrSettings){
-                        this->sensorConfigSettings[id].settings[metric].thresholdEnabled = enabled;
-                        if(this->storeSensorConfigField(id, enabled, sensorConfThresholdEnabled, metric)){
-                            SerialAT.println("OK");
-                            status = true;
-                        }
+                if((enabled == 0) || (enabled == 1)){
+                    if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdEnabled, enabled)){
+                        SerialAT.println("OK");
+                        commandProcessed = true;
                     }
                 }
-                
-                commandProcessed = status;
             }
 
             // Set sensor low threshold level 
@@ -330,18 +371,10 @@ void NodeManager::processAtCommands(void){
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t tll = strtol(nextNr, NULL, 10);
 
-                bool status = false;
-                if(id < this->nrSensors){
-                    if(metric<this->sensorConfigSettings[id].nrSettings){
-                        this->sensorConfigSettings[id].settings[metric].thresholdLow = tll;
-                        if(this->storeSensorConfigField(id, tll, sensorConfThresholdLow, metric)){
-                            SerialAT.println("OK");
-                            status = true;
-                        }
-                    }
+                if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdLow, tll)){
+                    SerialAT.println("OK");
+                    commandProcessed = true;
                 }
-                
-                commandProcessed = status;
             }
 
             // Set sensor low threshold level 
@@ -353,18 +386,10 @@ void NodeManager::processAtCommands(void){
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t tlh = strtol(nextNr, NULL, 10);
 
-                bool status = false;
-                if(id < this->nrSensors){
-                    if(metric<this->sensorConfigSettings[id].nrSettings){
-                        this->sensorConfigSettings[id].settings[metric].thresholdHigh = tlh;
-                        if(this->storeSensorConfigField(id, tlh, sensorConfThresholdHigh, metric)){
-                            SerialAT.println("OK");
-                            status = true;
-                        }
-                    }
+                if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdHigh, tlh)){
+                    SerialAT.println("OK");
+                    commandProcessed = true;
                 }
-                
-                commandProcessed = status;
             }
         }
 
@@ -381,286 +406,3 @@ void NodeManager::processAtCommands(void){
     }
 }
 
-
-/***/
-// store complete sensor configuration / will overwrite existing configs
-bool NodeManager::storeSensorConfig(uint8_t nrSensors, SensorConfig_t * config){
-    if(nrSensors > MAX_NR_OF_SENSORS){
-        return false;
-    }
-    if(config == NULL){
-        return false;
-    }
-    EEPROM.write(NR_SENSORS_OFFSET, nrSensors);
-
-    int offset = 1;
-    int bytesStored = 0;
-    for(uint8_t i=0; i<nrSensors; i++){
-        storeSensorConfig(offset, config[i], &bytesStored);
-        offset += bytesStored;
-    }
-
-    EEPROM.commit();
-
-    return true;
-}
-
-// store configuration of a single sensor
-bool NodeManager::storeSensorConfig(int offset, SensorConfig_t config, int * bytesStored){
-    int space_needed = SENSOR_CONFIG_HEADER_SIZE + SENSOR_CONFIG_SETTTINGS_SIZE*config.nrSettings;
-    if(space_needed + offset > EEPROM.length()){
-        return false;
-    }
-
-    int size = 2;
-    int memPtr = offset;
-    uint8_t msb, lsb;
-
-    EEPROM.write(memPtr + size++, config.i2cAddress);
-    EEPROM.write(memPtr + size++, config.type);
-    EEPROM.write(memPtr + size++, config.nrSettings);
-    
-    for(int i=0; i<config.nrSettings; i++){
-        // write i-th sensor metric poll interval
-        msb = (uint8_t)(config.settings[i].pollInterval >> 8);
-        lsb = (uint8_t)(config.settings[i].pollInterval & 0xFF);
-        EEPROM.write(memPtr + size++, msb);
-        EEPROM.write(memPtr + size++, lsb);
-
-        // write i-th sensor metric threshold enabled
-        EEPROM.write(memPtr + size++, config.settings[i].thresholdEnabled);
-
-        // write i-th sensor metric threshold level low
-        msb = (uint8_t)(config.settings[i].thresholdLow >> 8);
-        lsb = (uint8_t)(config.settings[i].thresholdLow & 0xFF);
-        EEPROM.write(memPtr + size++, msb);
-        EEPROM.write(memPtr + size++, lsb);
-
-        // write i-th sensor metric threshold level high
-        msb = (uint8_t)(config.settings[i].thresholdHigh >> 8);
-        lsb = (uint8_t)(config.settings[i].thresholdHigh & 0xFF);
-        EEPROM.write(memPtr + size++, msb);
-        EEPROM.write(memPtr + size++, lsb);
-    }
-
-    *bytesStored = size;
-    msb = (uint8_t)((offset+size) >> 8);
-    lsb = (uint8_t)((offset+size) & 0xFF);
-    EEPROM.write(offset, msb);
-    EEPROM.write(offset + 1, lsb);
-
-    EEPROM.commit();
-
-    return true;
-}
-
-bool NodeManager::storeSensorConfigField(uint8_t sensorId, uint8_t value, SensorConfigField_t field, uint8_t metric){
-    int offset = this->getConfigFieldOffset(sensorId, field, metric);
-    if(offset == -1){
-        return false;
-    }
-    if(offset<EEPROM.length()){
-        this->storeSensorConfigField(offset, value);
-        return true;
-    }
-    return false;
-}
-
-bool NodeManager::storeSensorConfigField(uint8_t sensorId, uint16_t value, SensorConfigField_t field, uint8_t metric){
-    int offset = this->getConfigFieldOffset(sensorId, field, metric);
-    if(offset == -1){
-        return false;
-    }
-    if(offset<EEPROM.length() - 1){
-        this->storeSensorConfigField(offset, value);
-        return true;
-    }
-    return false;
-}
-
-
-// store a single configuration field (1 byte)
-void NodeManager::storeSensorConfigField(int offset, uint8_t value){
-    EEPROM.write(offset, value);
-    EEPROM.commit();
-}
-
-// store a single configuration field (2 bytes)
-void NodeManager::storeSensorConfigField(int offset, uint16_t value){
-    uint8_t msb, lsb;
-    msb = (uint8_t)(value >> 8);
-    lsb = (uint8_t)(value & 0xFF);
-    EEPROM.write(offset, msb);
-    EEPROM.write(offset+1, lsb);
-    EEPROM.commit();
-}
-
-int NodeManager::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field){
-    int baseOffset = 1;
-    int fieldOffset;
-
-    uint8_t msb, lsb;
-
-    // check id is in range
-    if(!(sensorId < this->nrSensors)){
-        return -1;
-    }
-
-    // loop over sensors (ignore loop if sensorId = 0 -> first sensor, baseOffset = 1)
-    for(int i=0; i<sensorId; i++){
-        // read offset of next sensor
-        msb = EEPROM.read(baseOffset);
-        lsb = EEPROM.read(baseOffset+1);
-        baseOffset = (int)((msb<<8) | lsb);
-    }
-
-    switch(field){
-        case sensorConfBase:{
-            fieldOffset = 0;
-        } break;
-        case sensorConfI2cAddress:{
-            fieldOffset = SENSOR_CONFIG_I2C_OFFSET;
-        } break;
-        case sensorConfType:{
-            fieldOffset = SENSOR_CONFIG_TYPE_OFFSET;
-        } break;
-        default: return -1;
-    }
-
-    return baseOffset + fieldOffset;
-}
-
-int NodeManager::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field, uint8_t metric){
-    int baseOffset = 1;
-    int fieldOffset;
-
-    uint8_t msb, lsb;
-
-    // check id is in range
-    if(!(sensorId < this->nrSensors)){
-        return -1;
-    }
-
-    // loop over sensors (ignore loop if sensorId = 0 -> first sensor, baseOffset = 1)
-    for(int i=0; i<sensorId; i++){
-        // read offset of next sensor
-        msb = EEPROM.read(baseOffset);
-        lsb = EEPROM.read(baseOffset+1);
-        baseOffset = (int)((msb<<8) | lsb);
-    }
-
-    // read metric sections size
-    int nrMetrics = (int)EEPROM.read(baseOffset+4);
-
-    // determine extra offset
-    if( !(metric < nrMetrics) ){
-        return -1;
-    }
-    switch(field){
-        case sensorConfPollInterval:{
-            fieldOffset = SENSOR_CONFIG_POL_OFFSET + metric * SENSOR_CONFIG_SETTTINGS_SIZE;
-        } break;
-        case sensorConfThresholdEnabled:{
-            fieldOffset = SENSOR_CONFIG_TE_OFFSET + metric * SENSOR_CONFIG_SETTTINGS_SIZE;
-        } break;
-        case sensorConfThresholdLow:{
-            fieldOffset = SENSOR_CONFIG_TL_OFFSET + metric * SENSOR_CONFIG_SETTTINGS_SIZE;
-        } break;
-        case sensorConfThresholdHigh:{
-            fieldOffset = SENSOR_CONFIG_TH_OFFSET + metric * SENSOR_CONFIG_SETTTINGS_SIZE;
-        } break;
-        default: return -1;
-    }
-
-    return baseOffset + fieldOffset;
-}
-
-// read the complete configuration memory
-bool NodeManager::readSensorConfig(void){
-    if(!EEPROM.isValid()){
-        return false;
-    }
-    if(this->sensorConfigSettings != NULL){
-        return false;
-    }
-
-    this->nrSensors = EEPROM.read(NR_SENSORS_OFFSET);
-
-    this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
-    if(this->sensorConfigSettings == NULL){
-        SerialAT.println("Malloc failed.");
-    }
-
-    int offset;
-    for(int i=0; i<this->nrSensors; i++){
-        offset = getConfigFieldOffset(i, sensorConfBase);
-
-        uint8_t msb, lsb;
-        // read i-th sensor i2c address
-        this->sensorConfigSettings[i].i2cAddress = EEPROM.read(offset+SENSOR_CONFIG_I2C_OFFSET);
-        
-        // read i-th sensor type address
-        this->sensorConfigSettings[i].type = EEPROM.read(offset+SENSOR_CONFIG_TYPE_OFFSET);
-
-        // read i-th sensor nr metric settings
-        this->sensorConfigSettings[i].nrSettings = EEPROM.read(offset+SENSOR_CONFIG_NRSET_OFFSET);
-
-        // allocate space to store the settings
-        this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrSettings);
-        if(this->sensorConfigSettings[i].settings == NULL){
-            SerialAT.println("Malloc settings failed.");
-            return false;
-        }
-
-        // read i-th sensor metric settings
-        for(int j=0; j<this->sensorConfigSettings[i].nrSettings; j++){
-            // poll interval
-            msb = EEPROM.read(offset + SENSOR_CONFIG_POL_OFFSET + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-            lsb = EEPROM.read(offset + SENSOR_CONFIG_POL_OFFSET + 1 + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-            this->sensorConfigSettings[i].settings[j].pollInterval = (uint16_t)((msb<<8) | lsb);
-            
-            // threshold enabled
-            this->sensorConfigSettings[i].settings[j].thresholdEnabled = EEPROM.read(offset + SENSOR_CONFIG_TE_OFFSET + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-
-            // threshold level low
-            msb = EEPROM.read(offset + SENSOR_CONFIG_TL_OFFSET + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-            lsb = EEPROM.read(offset + SENSOR_CONFIG_TL_OFFSET + 1 + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-            this->sensorConfigSettings[i].settings[j].thresholdLow = (uint16_t)((msb<<8) | lsb);
-
-            // threshold level high
-            msb = EEPROM.read(offset + SENSOR_CONFIG_TH_OFFSET + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-            lsb = EEPROM.read(offset + SENSOR_CONFIG_TH_OFFSET + 1 + j * SENSOR_CONFIG_SETTTINGS_SIZE);
-            this->sensorConfigSettings[i].settings[j].thresholdHigh = (uint16_t)((msb<<8) | lsb);
-        }
-    }
-
-    return true;
-}
-
-void NodeManager::printSensorConfig(void){
-    SerialAT.print("Nr sensors: ");
-    SerialAT.println(this->nrSensors);
-
-    for(int i=0; i<nrSensors; i++){
-        SerialAT.print(" * Sensor ");
-        SerialAT.println(i);
-        SerialAT.print("    - i2c: ");
-        SerialAT.println(this->sensorConfigSettings[i].i2cAddress, HEX);
-        SerialAT.print("    - type: ");
-        SerialAT.println(this->sensorConfigSettings[i].type, HEX);
-        SerialAT.print("    - metrics: ");
-        SerialAT.println(this->sensorConfigSettings[i].nrSettings);
-        for(int j=0; j<this->sensorConfigSettings[i].nrSettings; j++){
-            SerialAT.print("    - m");
-            SerialAT.print(j);
-            SerialAT.print(" ");
-            SerialAT.print(this->sensorConfigSettings[i].settings[j].pollInterval);
-            SerialAT.print(" ");
-            SerialAT.print(this->sensorConfigSettings[i].settings[j].thresholdEnabled);
-            SerialAT.print(" ");
-            SerialAT.print(this->sensorConfigSettings[i].settings[j].thresholdLow);
-            SerialAT.print(" ");
-            SerialAT.println(this->sensorConfigSettings[i].settings[j].thresholdHigh);
-        }
-    }
-}

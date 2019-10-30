@@ -10,8 +10,8 @@
  *  Gebroeders De Smetstraat 1,
  *  B-9000 Gent, Belgium
  *
- *         File: NodeManager.h
- *      Created: 2019-10-21
+ *         File: NonVolatileConfig.h
+ *      Created: 2019-10-25
  *       Author: Geoffrey Ottoy
  *      Version: 0.1
  *
@@ -26,8 +26,7 @@
 #define __NON_VOLATILE_CONFIG_H__
 
 #include <Arduino.h>
-
-#define AT_COMMAND_MAX_SIZE 32
+#include "Sensor.h"
 
 typedef struct metricSettings{
     uint16_t pollInterval;
@@ -39,7 +38,7 @@ typedef struct metricSettings{
 typedef struct sensorConfig{
     uint8_t i2cAddress;
     uint8_t type;
-    uint8_t nrSettings;
+    uint8_t nrMetrics;
     MetricSettings_t * settings;
 } SensorConfig_t;
 
@@ -58,41 +57,56 @@ class NonVolatileConfig{
 public:
     // constructor
     NonVolatileConfig(void);
-
-    // destructor needed? e.g. memory free when in "normal operation = sensors are configured"
-
-    // needed?
-    void begin(void);
+    // desturctor
+    ~NonVolatileConfig();
 
     // read complete configuration from non-volatile memory
     bool readSensorConfig(void);
 
-private:
+    // get number of sensors in the configuration
+    uint8_t getNrSensors(void);
 
+    // check if sensor with specified id and type exists in the configuration
+    bool sensorInConfig(uint8_t id, uint8_t type);
+    
+    // discard current configuration
+    void discardConfig(void);
+    // create a new configuration based on a list of sensors
+    bool createNewConfig(uint8_t nrSensors, Sensor * list);
+
+    // get type of sensor with id 'id'
+    bool getSensorType(uint8_t id, uint8_t * type);
+    // get poll interval for metric 'metric' of sensor with id 'id'
+    bool getSensorPollInterval(uint8_t id, uint8_t metric, uint16_t * poll);
+    // get threshold settings for metric 'metric' of sensor with id 'id'
+    bool getSensorThresholdSettings(uint8_t id, uint8_t metric, uint8_t *enabled, uint16_t * tll, uint16_t *tlh);
+
+    // store a single configuration field (1 byte)
+    bool storeSensorConfigField(uint8_t sensorId, uint8_t metric, SensorConfigField_t field, uint8_t value);
+    // store a single configuration field (2 bytes)
+    bool storeSensorConfigField(uint8_t sensorId, uint8_t metric, SensorConfigField_t field, uint16_t value);
 
     // store complete sensor configuration / will overwrite existing configs
-    bool storeSensorConfig(uint8_t nrSensors, SensorConfig_t * config);
+    void storeSensorConfig(void);
+
+    // for debugging purposes
+    void printSensorConfig(void);
+
+private:
     // store configuration of a single sensor
     bool storeSensorConfig(int offset, SensorConfig_t config, int * bytesStored);
 
     // store a single configuration field (1 byte)
-    bool storeSensorConfigField(uint8_t sensorId, uint8_t value, SensorConfigField_t field, uint8_t metric=0);
     void storeSensorConfigField(int offset, uint8_t value);
     // store a single configuration field (2 bytes)
-    bool storeSensorConfigField(uint8_t sensorId, uint16_t value, SensorConfigField_t field, uint8_t metric=0);
     void storeSensorConfigField(int offset, uint16_t value);
 
     int getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field, uint8_t metric);
     int getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field);
 
-    void printSensorConfig(void);
-
-    uint16_t id;
-    char idStr[5];
+    
 
     uint8_t nrSensors;
-
-    // for testing only? keep settings in RAM
     SensorConfig_t * sensorConfigSettings;
 };
 

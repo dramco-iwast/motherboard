@@ -13,6 +13,7 @@ LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
 uint8_t testdata[4] = {0x47, 0x4f, 00, 00};
 
 void setup() {
+  delay(5000);
   // USB Serial for configuration
   SerialAT.begin(115200); 
   
@@ -21,8 +22,8 @@ void setup() {
 
   // put your setup code here, to run once:
   nm.begin();
-  //nm.runConfigMode(); // run config
-  nm.runConfigMode(true); // run config forever
+  nm.runConfigMode(); // run config
+  //nm.runConfigMode(true); // run config forever
 
   // join lora network
   lora.join();

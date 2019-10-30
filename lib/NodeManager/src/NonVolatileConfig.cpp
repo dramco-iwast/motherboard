@@ -1,15 +1,3 @@
-// Non-Volatile storage offsets
-#define NR_SENSORS_OFFSET               0
-#define SENSOR_CONFIG_I2C_OFFSET        2
-#define SENSOR_CONFIG_TYPE_OFFSET       3
-#define SENSOR_CONFIG_NRSET_OFFSET      4
-#define SENSOR_CONFIG_HEADER_SIZE       5
-#define SENSOR_CONFIG_POL_OFFSET        (SENSOR_CONFIG_HEADER_SIZE)
-#define SENSOR_CONFIG_TE_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+2)
-#define SENSOR_CONFIG_TL_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+3)
-#define SENSOR_CONFIG_TH_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+5)
-#define SENSOR_CONFIG_SETTTINGS_SIZE    7
-
 /*  ____  ____      _    __  __  ____ ___
  * |  _ \|  _ \    / \  |  \/  |/ ___/ _ \
  * | | | | |_) |  / _ \ | |\/| | |  | | | |
@@ -22,8 +10,8 @@
  *  Gebroeders De Smetstraat 1,
  *  B-9000 Gent, Belgium
  *
- *         File: NodeManager.cpp
- *      Created: 2019-10-16
+ *         File: NonVolatileConfig.cpp
+ *      Created: 2019-10-25
  *       Author: Geoffrey Ottoy
  *      Version: 0.1
  *
@@ -37,15 +25,10 @@
 #include <FlashAsEEPROM.h>
 #include "NonVolatileConfig.h"
 
-// Maximum number of sensors that is being supported
-#define MAX_NR_OF_SENSORS               8
-
-// List of interrupt pins
-// TODO
-
-// Address range that is used to scan for sensors 
-#define SENSOR_IIC_BASE_ADDRESS         0x60
-#define SENSOR_IIC_END_ADDRESS          0x6F
+#define DEBUGGING
+#ifdef DEBUGGING
+#define DEBUG SerialUSB
+#endif
 
 // Non-Volatile storage offsets
 #define NR_SENSORS_OFFSET               0
@@ -61,35 +44,227 @@
 
 
 NonVolatileConfig::NonVolatileConfig(void){
-
+    this->sensorConfigSettings = NULL;
+    this->nrSensors = 0;
 }
 
-/***/
-// store complete sensor configuration / will overwrite existing configs
-bool NonVolatileConfig::storeSensorConfig(uint8_t nrSensors, SensorConfig_t * config){
-    if(nrSensors > MAX_NR_OF_SENSORS){
+NonVolatileConfig::~NonVolatileConfig(){
+    this->discardConfig();
+}
+
+uint8_t NonVolatileConfig::getNrSensors(void){
+    return this->nrSensors;
+}
+
+bool NonVolatileConfig::sensorInConfig(uint8_t id, uint8_t type){
+    DEBUG.print("Looking up: ");
+    DEBUG.print(id);
+    DEBUG.print(" - 0x");
+    DEBUG.println(type, HEX);
+
+    if(id<this->nrSensors){
+        DEBUG.print("id in config, type = 0x");
+        DEBUG.println(this->sensorConfigSettings[id].type, HEX);
+        if(this->sensorConfigSettings[id].type == type){
+            DEBUG.println("MATCH");
+            return true;
+        }
+    }
+    DEBUG.println("NO MATCH");
+    return false;
+}
+
+void NonVolatileConfig::discardConfig(void){
+    if(this->nrSensors > 0){
+        // loop through config and free memory for settings
+        for(uint8_t i=0; i<this->nrSensors; i++){
+            free(this->sensorConfigSettings[i].settings);
+        }
+        // now free the rest
+        free(this->sensorConfigSettings);
+    }
+
+    this->nrSensors = 0;
+#ifdef DEBUGGING
+    DEBUG.println("RAM freed");
+#endif
+}
+
+bool NonVolatileConfig::createNewConfig(uint8_t nrSensors, Sensor * list){
+    this->nrSensors = nrSensors;
+
+    this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
+    if(this->sensorConfigSettings == NULL){
+#ifdef DEBUGGING
+        DEBUG.println("Malloc failed.");
+#endif
         return false;
     }
-    if(config == NULL){
-        return false;
-    }
-    EEPROM.write(NR_SENSORS_OFFSET, nrSensors);
 
-    int offset = 1;
-    int bytesStored = 0;
-    for(uint8_t i=0; i<nrSensors; i++){
-        storeSensorConfig(offset, config[i], &bytesStored);
-        offset += bytesStored;
-    }
+    for(int i=0; i<this->nrSensors; i++){
+        // copy i-th sensor i2c address
+        this->sensorConfigSettings[i].i2cAddress = list[i].getIicAddress();
+        
+        // copy i-th sensor type address
+        this->sensorConfigSettings[i].type = list[i].getSensorType();
 
-    EEPROM.commit();
+        // copy i-th sensor nr metric settings
+        this->sensorConfigSettings[i].nrMetrics = list[i].getNrMetrics();
+
+        // allocate space to store the settings
+        this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrMetrics);
+        if(this->sensorConfigSettings[i].settings == NULL){
+#ifdef DEBUGGING
+            DEBUG.println("Malloc settings failed.");
+#endif
+            return false;
+        }
+
+        // init i-th sensor metric settings
+        for(int j=0; j<this->sensorConfigSettings[i].nrMetrics; j++){
+            // poll interval
+            this->sensorConfigSettings[i].settings[j].pollInterval = 0xFFFF;
+            
+            // threshold enabled
+            this->sensorConfigSettings[i].settings[j].thresholdEnabled = 0;
+
+            // threshold level low
+            this->sensorConfigSettings[i].settings[j].thresholdLow = 0;
+
+            // threshold level high
+            this->sensorConfigSettings[i].settings[j].thresholdHigh = 0xFFFF;
+        }
+    }
 
     return true;
 }
 
-// store configuration of a single sensor
+// get type of sensor in config (return false if sensor id is not valid)
+bool NonVolatileConfig::getSensorType(uint8_t id, uint8_t * type){
+    if(id < this->nrSensors){
+        *type = this->sensorConfigSettings[id].type;
+        return true;
+    }
+    return false;
+}
+
+// get poll interval for metric 'metric' of sensor with id 'id'
+bool NonVolatileConfig::getSensorPollInterval(uint8_t id, uint8_t metric, uint16_t * poll){
+    if(id < this->nrSensors){
+        if(metric < this->sensorConfigSettings[id].nrMetrics){
+            *poll = this->sensorConfigSettings[id].settings[metric].pollInterval;
+            return true;
+        }
+    }
+    return false;
+}
+
+// get poll interval for metric 'metric' of sensor with id 'id'
+bool NonVolatileConfig::getSensorThresholdSettings(uint8_t id, uint8_t metric, uint8_t *enabled, uint16_t * tll, uint16_t *tlh){
+    if(id < this->nrSensors){
+        if(metric < this->sensorConfigSettings[id].nrMetrics){
+            *enabled = this->sensorConfigSettings[id].settings[metric].thresholdEnabled;
+            *tll = this->sensorConfigSettings[id].settings[metric].thresholdLow;
+            *tlh = this->sensorConfigSettings[id].settings[metric].thresholdHigh;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool NonVolatileConfig::storeSensorConfigField(uint8_t sensorId, uint8_t metric, SensorConfigField_t field, uint8_t value){
+    int offset = this->getConfigFieldOffset(sensorId, field, metric);
+    if(offset == -1){
+        return false;
+    }
+    if(offset<EEPROM.length()){
+        this->storeSensorConfigField(offset, value);
+        // also update RAM
+        if(field ==  sensorConfThresholdEnabled){
+            this->sensorConfigSettings[sensorId].settings[metric].thresholdEnabled = value;
+        }
+        return true;
+    }
+    return false;
+}
+
+bool NonVolatileConfig::storeSensorConfigField(uint8_t sensorId, uint8_t metric, SensorConfigField_t field, uint16_t value){
+    int offset = this->getConfigFieldOffset(sensorId, field, metric);
+    if(offset == -1){
+        return false;
+    }
+    if(offset<EEPROM.length() - 1){
+        this->storeSensorConfigField(offset, value);
+        // also update RAM
+        switch(field){
+            case sensorConfPollInterval: {
+                this->sensorConfigSettings[sensorId].settings[metric].pollInterval = value;
+            } break;
+            case sensorConfThresholdLow: {
+                this->sensorConfigSettings[sensorId].settings[metric].thresholdLow = value;
+            } break;
+            case sensorConfThresholdHigh: {
+                this->sensorConfigSettings[sensorId].settings[metric].thresholdHigh = value;
+            } break;
+            default : break;
+        }
+        return true;
+    }
+    return false;
+}
+
+// store complete sensor configuration / will overwrite existing configs
+void NonVolatileConfig::storeSensorConfig(void){
+    EEPROM.write(NR_SENSORS_OFFSET, nrSensors);
+
+    int offset = 1;
+    int bytesStored = 0;
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        storeSensorConfig(offset, this->sensorConfigSettings[i], &bytesStored);
+        offset += bytesStored;
+    }
+
+    EEPROM.commit();
+}
+
+void NonVolatileConfig::printSensorConfig(void){
+#ifdef DEBUGGING
+    DEBUG.print("Nr sensors: ");
+    DEBUG.println(this->nrSensors);
+
+    for(int i=0; i<nrSensors; i++){
+        DEBUG.print(" * Sensor ");
+        DEBUG.println(i);
+        DEBUG.print("    - i2c: ");
+        DEBUG.println(this->sensorConfigSettings[i].i2cAddress, HEX);
+        DEBUG.print("    - type: ");
+        DEBUG.println(this->sensorConfigSettings[i].type, HEX);
+        DEBUG.print("    - metrics: ");
+        DEBUG.println(this->sensorConfigSettings[i].nrMetrics);
+        for(int j=0; j<this->sensorConfigSettings[i].nrMetrics; j++){
+            DEBUG.print("    - m");
+            DEBUG.print(j);
+            DEBUG.print(" ");
+            DEBUG.print(this->sensorConfigSettings[i].settings[j].pollInterval);
+            DEBUG.print(" ");
+            DEBUG.print(this->sensorConfigSettings[i].settings[j].thresholdEnabled);
+            DEBUG.print(" ");
+            DEBUG.print(this->sensorConfigSettings[i].settings[j].thresholdLow);
+            DEBUG.print(" ");
+            DEBUG.println(this->sensorConfigSettings[i].settings[j].thresholdHigh);
+        }
+    }
+#endif
+}
+
+
+/*****************************************************************************
+ * Private methods                                                           *
+ *****************************************************************************/
+
+// store configuration of a single sensor (does not commit to 'EEPROM')
 bool NonVolatileConfig::storeSensorConfig(int offset, SensorConfig_t config, int * bytesStored){
-    int space_needed = SENSOR_CONFIG_HEADER_SIZE + SENSOR_CONFIG_SETTTINGS_SIZE*config.nrSettings;
+    int space_needed = SENSOR_CONFIG_HEADER_SIZE + SENSOR_CONFIG_SETTTINGS_SIZE*config.nrMetrics;
     if(space_needed + offset > EEPROM.length()){
         return false;
     }
@@ -100,9 +275,9 @@ bool NonVolatileConfig::storeSensorConfig(int offset, SensorConfig_t config, int
 
     EEPROM.write(memPtr + size++, config.i2cAddress);
     EEPROM.write(memPtr + size++, config.type);
-    EEPROM.write(memPtr + size++, config.nrSettings);
+    EEPROM.write(memPtr + size++, config.nrMetrics);
     
-    for(int i=0; i<config.nrSettings; i++){
+    for(int i=0; i<config.nrMetrics; i++){
         // write i-th sensor metric poll interval
         msb = (uint8_t)(config.settings[i].pollInterval >> 8);
         lsb = (uint8_t)(config.settings[i].pollInterval & 0xFF);
@@ -131,35 +306,8 @@ bool NonVolatileConfig::storeSensorConfig(int offset, SensorConfig_t config, int
     EEPROM.write(offset, msb);
     EEPROM.write(offset + 1, lsb);
 
-    EEPROM.commit();
-
     return true;
 }
-
-bool NonVolatileConfig::storeSensorConfigField(uint8_t sensorId, uint8_t value, SensorConfigField_t field, uint8_t metric){
-    int offset = this->getConfigFieldOffset(sensorId, field, metric);
-    if(offset == -1){
-        return false;
-    }
-    if(offset<EEPROM.length()){
-        this->storeSensorConfigField(offset, value);
-        return true;
-    }
-    return false;
-}
-
-bool NonVolatileConfig::storeSensorConfigField(uint8_t sensorId, uint16_t value, SensorConfigField_t field, uint8_t metric){
-    int offset = this->getConfigFieldOffset(sensorId, field, metric);
-    if(offset == -1){
-        return false;
-    }
-    if(offset<EEPROM.length() - 1){
-        this->storeSensorConfigField(offset, value);
-        return true;
-    }
-    return false;
-}
-
 
 // store a single configuration field (1 byte)
 void NonVolatileConfig::storeSensorConfigField(int offset, uint8_t value){
@@ -262,15 +410,15 @@ bool NonVolatileConfig::readSensorConfig(void){
     if(!EEPROM.isValid()){
         return false;
     }
-    if(this->sensorConfigSettings != NULL){
-        return false;
-    }
 
     this->nrSensors = EEPROM.read(NR_SENSORS_OFFSET);
 
     this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
     if(this->sensorConfigSettings == NULL){
-        Serial.println("Malloc failed.");
+#ifdef DEBUGGING
+        DEBUG.println("Malloc failed.");
+#endif
+        return false;
     }
 
     int offset;
@@ -285,17 +433,19 @@ bool NonVolatileConfig::readSensorConfig(void){
         this->sensorConfigSettings[i].type = EEPROM.read(offset+SENSOR_CONFIG_TYPE_OFFSET);
 
         // read i-th sensor nr metric settings
-        this->sensorConfigSettings[i].nrSettings = EEPROM.read(offset+SENSOR_CONFIG_NRSET_OFFSET);
+        this->sensorConfigSettings[i].nrMetrics = EEPROM.read(offset+SENSOR_CONFIG_NRSET_OFFSET);
 
         // allocate space to store the settings
-        this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrSettings);
+        this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrMetrics);
         if(this->sensorConfigSettings[i].settings == NULL){
-            Serial.println("Malloc settings failed.");
+#ifdef DEBUGGING
+            DEBUG.println("Malloc settings failed.");
+#endif
             return false;
         }
 
         // read i-th sensor metric settings
-        for(int j=0; j<this->sensorConfigSettings[i].nrSettings; j++){
+        for(int j=0; j<this->sensorConfigSettings[i].nrMetrics; j++){
             // poll interval
             msb = EEPROM.read(offset + SENSOR_CONFIG_POL_OFFSET + j * SENSOR_CONFIG_SETTTINGS_SIZE);
             lsb = EEPROM.read(offset + SENSOR_CONFIG_POL_OFFSET + 1 + j * SENSOR_CONFIG_SETTTINGS_SIZE);
@@ -319,30 +469,3 @@ bool NonVolatileConfig::readSensorConfig(void){
     return true;
 }
 
-void NonVolatileConfig::printSensorConfig(void){
-    Serial.print("Nr sensors: ");
-    Serial.println(this->nrSensors);
-
-    for(int i=0; i<nrSensors; i++){
-        Serial.print(" * Sensor ");
-        Serial.println(i);
-        Serial.print("    - i2c: ");
-        Serial.println(this->sensorConfigSettings[i].i2cAddress, HEX);
-        Serial.print("    - type: ");
-        Serial.println(this->sensorConfigSettings[i].type, HEX);
-        Serial.print("    - metrics: ");
-        Serial.println(this->sensorConfigSettings[i].nrSettings);
-        for(int j=0; j<this->sensorConfigSettings[i].nrSettings; j++){
-            Serial.print("    - m");
-            Serial.print(j);
-            Serial.print(" ");
-            Serial.print(this->sensorConfigSettings[i].settings[j].pollInterval);
-            Serial.print(" ");
-            Serial.print(this->sensorConfigSettings[i].settings[j].thresholdEnabled);
-            Serial.print(" ");
-            Serial.print(this->sensorConfigSettings[i].settings[j].thresholdLow);
-            Serial.print(" ");
-            Serial.println(this->sensorConfigSettings[i].settings[j].thresholdHigh);
-        }
-    }
-}

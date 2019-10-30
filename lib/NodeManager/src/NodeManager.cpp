@@ -33,18 +33,6 @@
 #define SENSOR_IIC_BASE_ADDRESS         0x60
 #define SENSOR_IIC_END_ADDRESS          0x6F
 
-// Non-Volatile storage offsets
-#define NR_SENSORS_OFFSET               0
-#define SENSOR_CONFIG_I2C_OFFSET        2
-#define SENSOR_CONFIG_TYPE_OFFSET       3
-#define SENSOR_CONFIG_NRSET_OFFSET      4
-#define SENSOR_CONFIG_HEADER_SIZE       5
-#define SENSOR_CONFIG_POL_OFFSET        (SENSOR_CONFIG_HEADER_SIZE)
-#define SENSOR_CONFIG_TE_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+2)
-#define SENSOR_CONFIG_TL_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+3)
-#define SENSOR_CONFIG_TH_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+5)
-#define SENSOR_CONFIG_SETTTINGS_SIZE    7
-
 // List of interrupt pins
 uint8_t intPins[MAX_NR_OF_SENSORS] = {A3, A4, 8, 9, 38, 3};
 

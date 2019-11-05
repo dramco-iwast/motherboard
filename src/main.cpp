@@ -33,6 +33,10 @@ void loop() {
   // put your main code here, to run repeatedly:
   nm.loop();
 
+  if(nm.dataAvailable()){
+    nm.getSensorData((uint8_t *)0, (uint8_t *)0);
+  }
+
   //lora.sendData(testdata, 4);
   //testdata[3]++;
 }

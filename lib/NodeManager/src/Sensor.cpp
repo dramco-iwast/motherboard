@@ -37,6 +37,7 @@
 #define CMD_GET_M_NR                0x23 // get nr. of metrics
 #define CMD_GET_M_DATA              0x14 // get measurement
 #define CMD_START_MEASUREMENT       0x13 // get/start a measurement
+#define CMD_SET_THRESHOLDS          0x24 // set thresholds
 
 /******************************************************************************
  * Static functions (IIC communication)
@@ -84,18 +85,12 @@ static bool readSensorData(uint8_t address, uint8_t command, uint8_t * data, uin
 static bool writeSensorData(uint8_t address, uint8_t command, uint8_t * data, uint8_t len){
   Wire.beginTransmission(address);
   Wire.write(command);
-  uint8_t stat = Wire.endTransmission();
-  if(stat){
-    return false;
-  }
 
   if(len != 0){
-    Wire.beginTransmission(address);
     Wire.write(data, len);
-    stat = Wire.endTransmission();
   }
 
-  if(stat){
+  if(Wire.endTransmission()){
     return false;
   }
 
@@ -115,7 +110,6 @@ Sensor::Sensor(void){
   this->sensorType = 0;
 
   this->mLen = 0;
-  this->mData = NULL;
 
   this->_numErrors = 0;
 }
@@ -159,9 +153,9 @@ bool Sensor::init(uint8_t iicAddress){
 
   // set length of al measurements combined
   this->mLen = this->nrMetrics * 2;
-
-  // allocate memory to store sensor data
-  this->mData = (uint8_t *) malloc(this->mLen * sizeof(uint8_t));
+  // allicate memory for timing the measurements
+  this->pollInterval = (uint16_t *)malloc(sizeof(uint16_t)*this->nrMetrics);
+  this->pollTimer = (uint16_t *)malloc(sizeof(uint16_t)*this->nrMetrics);
 
   return true;
 }
@@ -171,61 +165,62 @@ bool Sensor::init(uint8_t iicAddress){
  * This necessary to detect which sensor is connected to which interrupt line.
  */
 bool Sensor::toggleInterrupt(void){
-  uint8_t ack = 0x00;
-  if(!writeSensorData(this->iicAddress, CMD_INT_TOGGLE, &ack, 1)){
-    return false;
-  }
-  return (bool)(ack == DEFAULT_ACK);
+  return writeSensorData(this->iicAddress, CMD_INT_TOGGLE, (uint8_t*)0, 0);
 }
 
+/* Start a new measurement on the sensor (polled operation)
+ * TODO: specify metrics? or do metric filtering here?
+ */
 bool Sensor::startMeasurement(void){
-  uint8_t ack = 0x00;
-  if(!writeSensorData(this->iicAddress, CMD_START_MEASUREMENT, &ack, 1)){
-    return false;
-  }
-  return (bool)(ack == DEFAULT_ACK);
+  return writeSensorData(this->iicAddress, CMD_START_MEASUREMENT, (uint8_t*)0, 0);
 }
 
-bool Sensor::requestMeasurementData(void){
-  // Wait until ready mechanism not implemented
-
-  uint8_t tempData[this->mLen];
-
-  bool rv = readSensorData(this->iicAddress, CMD_GET_M_DATA, tempData, this->mLen);
-  /*Serial.print("sensor->_mData:");
-  for(uint8_t i=0; i<this->mLen; i++){
-    if(this->mData[i] > 0x0F){
-      Serial.print(" ");
-    }
-    else{
-      Serial.print(" 0");
-    }
-    Serial.print(tempData[i], HEX);
-  }
-  Serial.println();*/
+/* Read all measurement data from the sensor
+ * TODO: for all metrics?
+ */
+bool Sensor::readMeasurementData(uint8_t * buf, uint8_t * len){
+  bool rv = readSensorData(this->iicAddress, CMD_GET_M_DATA, buf, this->mLen);
+  * len = this->mLen;
 
   return rv;
 }
 
-void Sensor::copyMeasurementData(uint8_t * buf, uint8_t len){
-  uint8_t mLen = len;
-  if(mLen > this->mLen){
-    mLen = this->mLen;
-  }
-  for(uint8_t i=0; i<mLen; i++){
-    *(buf+i) = *(this->mData+i);
-  }
+/* Send threshold settings for 'metric' to the sensor
+ */
+bool Sensor::setTresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh){
+  uint8_t data[6];
+  data[0] = metric;
+  data[1] = enabled;
+  data[2] = (uint8_t)(tLevelLow >> 8);
+  data[3] = (uint8_t)(tLevelLow & 0x00FF);
+  data[4] = (uint8_t)(tLevelHigh >> 8);
+  data[5] = (uint8_t)(tLevelHigh & 0x00FF);
+
+  return writeSensorData(this->iicAddress, CMD_SET_THRESHOLDS, data, 6);
 }
 
-/*bool Sensor::writeControlData(uint8_t * buf, uint8_t len){
-  if(len<this->cLen){
-    return writeSensorData(this->iicAddress, CMD_SET_C_DATA, buf, len);
-  }
- else{
-    return writeSensorData(this->iicAddress, CMD_SET_C_DATA, buf, this->cLen);
+/* Send poll interval for 'metric'
+ * For 'poll' = 0, polling is disabled (sensor will only supply data if thresholds are enabled)
+ */
+void Sensor::setPollInterval(uint8_t metric, uint16_t poll){
+  this->pollInterval[metric] = poll;
+  this->pollTimer[metric] = poll;
+}
+
+/* start a new measurement if poll timer has expired
+ * TODO: metric filtering
+ */
+void Sensor::loop(){
+  for(uint8_t i=0; i<this->nrMetrics; i++){
+    if(this->pollInterval[i] > 0){
+      this->pollTimer[i]--;
+      if(this->pollTimer[i] == 0){
+        this->pollTimer[i] = this->pollInterval[i];
+        this->startMeasurement(); // TODO: specify metric
+      }
+    }
   }
 }
-*/
 
 /* Access to sensor attributes ************************************************/
 
@@ -245,16 +240,8 @@ uint8_t Sensor::getIntPin(void){
   return this->intPin;
 }
 
-/*uint8_t Sensor::getTxLen(void){
-  return this->cLen;
-}*/
-
 void Sensor::setIntPin(uint8_t pinNr){
   this->intPin = pinNr;
-}
-
-void Sensor::pinCb(void){
-  SerialUSB.println("cb");
 }
 
 /* Private methods ************************************************************/
@@ -289,29 +276,3 @@ bool Sensor::requestNrMetrics(void){
 
   return true;
 }
-  
-/*bool Sensor::requestTxLen(void){
-  uint8_t txLen;
-  if(!readSensorData(this->iicAddress, CMD_GET_C_DATA_LEN, &txLen, 1)){
-    return false;
-  }
-
-  this->cLen = txLen;
-
-  return true;
-}*/
-  
-/*bool Sensor::checkReady(void){
-  uint8_t ready = 0x00;
-  if(!readSensorData(this->iicAddress, CMD_GET_READY, &ready, 1)){
-    //Serial.println(ready, HEX);
-    return false;
-  }
-
-  if(ready == 0x01){
-    //Serial.println(ready, HEX);
-    return true;
-  }
-
-  return false;
-}*/

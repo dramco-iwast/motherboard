@@ -37,18 +37,20 @@ public:
 
   // General functionality
   bool pollAddress(uint8_t iicAddress);
-
   bool init(uint8_t iicAddress);
   bool toggleInterrupt(void);
   void setIntPin(uint8_t pinNr);
 
-  void pinCb(void);
-
+  bool setTresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh);
   bool startMeasurement(void);
-  bool requestMeasurementData(void);
-  void copyMeasurementData(uint8_t * buf, uint8_t len);
+  void setPollInterval(uint8_t metric, uint16_t poll);
+  void loop(void);
 
-  //bool writeControlData(uint8_t * buf, uint8_t len);
+// start block not tested ===========================
+  
+  bool readMeasurementData(uint8_t * buf, uint8_t * len);
+
+  //end block not tested ===========================
 
   // return sensor attributes
   uint8_t getIicAddress(void);
@@ -59,8 +61,6 @@ public:
 private:
   bool requestSensorType(void);
   bool requestNrMetrics(void);
-  //bool requestTxLen(void);
- // bool checkReady(void);
 
 protected:
   uint8_t sensorType;
@@ -69,10 +69,12 @@ protected:
   
   uint8_t nrMetrics;  // nr of different metrics supported by the sensor, each metric measurement takes up 2 bytes
   uint8_t mLen;       // (max nr of measurement bytes=) nrMetrics * 2 
-  uint8_t * mData;    // able to store max nr of measurement bytes
+
+  uint16_t * pollInterval;
+  uint16_t * pollTimer;
 
   // optional
-  uint8_t _numErrors;
+  uint8_t _numErrors; // not used
 
 };
 

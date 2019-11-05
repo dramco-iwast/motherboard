@@ -51,6 +51,8 @@ public:
 
     // main operation
     void loop(void);
+    bool dataAvailable(void);
+    void getSensorData(uint8_t * data, uint8_t * len);
 
 private:
     void processAtCommands(void);

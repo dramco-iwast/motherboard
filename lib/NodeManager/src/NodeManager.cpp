@@ -36,22 +36,30 @@
 // List of interrupt pins
 uint8_t intPins[MAX_NR_OF_SENSORS] = {A3, A4, 8, 9, 38, 3};
 
+volatile bool sensorHasData[MAX_NR_OF_SENSORS] = {false, false, false, false, false, false};
+
 void sensor0Callback(void){
+    sensorHasData[0] = true;
     SerialAT.println("cb0");
 }
 void sensor1Callback(void){
+    sensorHasData[1] = true;
     SerialAT.println("cb1");
 }
 void sensor2Callback(void){
+    sensorHasData[2] = true;
     SerialAT.println("cb2");
 }
 void sensor3Callback(void){
+    sensorHasData[3] = true;
     SerialAT.println("cb3");
 }
 void sensor4Callback(void){
+    sensorHasData[4] = true;
     SerialAT.println("cb4");
 }
 void sensor5Callback(void){
+    sensorHasData[5] = true;
     SerialAT.println("cb5");
 }
 
@@ -143,6 +151,7 @@ void NodeManager::begin(void){
         else{
             // detect which interrupt pin the i-th sensor is connected to
             this->sensorList[i].toggleInterrupt();
+            delay(1); // give sensor time to toggle pin
             for(uint8_t pin=0; pin<MAX_NR_OF_SENSORS; pin++){
                 if(digitalRead(intPins[pin]) == LOW){
                     this->sensorList[i].setIntPin(intPins[pin]);
@@ -212,9 +221,26 @@ void NodeManager::runConfigMode(bool forever){
     }
 
     SerialAT.println("Configuring connected sensors ...");
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        SerialAT.print("Sensor ");
+        SerialAT.println(i);
+        // for each sensor metric
+        for(uint8_t j=0; j<this->sensorList[i].getNrMetrics(); j++){
+            // set thresholds
+            uint8_t enabled;
+            uint16_t tll;
+            uint16_t tlh;
+            this->nvConfig->getSensorThresholdSettings(i, j, &enabled, &tll, &tlh);
+            this->sensorList[i].setTresholds(j, enabled, tll, tlh);
+            // set poll interval
+            uint16_t poll;
+            this->nvConfig->getSensorPollInterval(i, j, &poll);
+            this->sensorList[i].setPollInterval(j, poll);
+        }
+    }
+
     SerialAT.println("Using configuration:");
     this->nvConfig->storeSensorConfig();
-    //todo: communicate config to sensors (i.e. threshold values)
 
     SerialAT.println("Exit config mode.");
 
@@ -223,8 +249,36 @@ void NodeManager::runConfigMode(bool forever){
 
 void NodeManager::loop(void){
     // low-power loop (but not right now)
-    delay(1000); 
+    delay(1000);
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        this->sensorList[i].loop();
+    }
     SerialAT.println("sleep");
+}
+
+bool NodeManager::dataAvailable(void){
+    return (sensorHasData[0] | sensorHasData[1] | sensorHasData[2] | sensorHasData[3] | sensorHasData[4] | sensorHasData[5]);
+}
+
+void NodeManager::getSensorData(uint8_t * data, uint8_t * len){
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        if(sensorHasData[i]){
+            sensorHasData[i] = false;
+            uint8_t tempData[20];
+            uint8_t len = 0;
+            this->sensorList[i].readMeasurementData(tempData, &len);
+            SerialAT.print("Sensor ");
+            SerialAT.print(i);
+            SerialAT.print(" data: ");
+            for(uint8_t j=0; j<len; j++){
+                if(tempData[j]<16){
+                    SerialAT.print("0");
+                }
+                SerialAT.print(tempData[j], HEX);
+            }
+            SerialAT.println();
+        }
+    }
 }
 
 void NodeManager::processAtCommands(void){
@@ -378,6 +432,12 @@ void NodeManager::processAtCommands(void){
                     SerialAT.println("OK");
                     commandProcessed = true;
                 }
+            }
+
+            // Set sensor low threshold level 
+            if(strstr(specific, "TEST")){
+                SerialAT.println("OK");
+                commandProcessed = true;
             }
         }
 

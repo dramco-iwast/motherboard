@@ -56,6 +56,7 @@ public:
 
 private:
     void processAtCommands(void);
+    void configureSensors(void);
 
     NonVolatileConfig * nvConfig;
 

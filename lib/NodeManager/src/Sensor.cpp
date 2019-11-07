@@ -60,7 +60,7 @@ static bool readSensorData(uint8_t address, uint8_t command, uint8_t * data, uin
   }
 
   // Read the data returned by the device
-  delay(5); // give the device some time to return the data
+  delay(10); // give the device some time to return the data
 
   Wire.requestFrom((uint8_t)address, (uint8_t)len);
   int i=len;
@@ -217,6 +217,9 @@ void Sensor::loop(){
       if(this->pollTimer[i] == 0){
         this->pollTimer[i] = this->pollInterval[i];
         this->startMeasurement(); // TODO: specify metric
+        SerialUSB.print("measure ");
+        SerialUSB.print(this->mLen);
+        SerialUSB.println(" bytes");
       }
     }
   }

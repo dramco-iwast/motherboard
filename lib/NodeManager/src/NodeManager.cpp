@@ -221,23 +221,7 @@ void NodeManager::runConfigMode(bool forever){
     }
 
     SerialAT.println("Configuring connected sensors ...");
-    for(uint8_t i=0; i<this->nrSensors; i++){
-        SerialAT.print("Sensor ");
-        SerialAT.println(i);
-        // for each sensor metric
-        for(uint8_t j=0; j<this->sensorList[i].getNrMetrics(); j++){
-            // set thresholds
-            uint8_t enabled;
-            uint16_t tll;
-            uint16_t tlh;
-            this->nvConfig->getSensorThresholdSettings(i, j, &enabled, &tll, &tlh);
-            this->sensorList[i].setTresholds(j, enabled, tll, tlh);
-            // set poll interval
-            uint16_t poll;
-            this->nvConfig->getSensorPollInterval(i, j, &poll);
-            this->sensorList[i].setPollInterval(j, poll);
-        }
-    }
+    this->configureSensors();
 
     SerialAT.println("Using configuration:");
     this->nvConfig->storeSensorConfig();
@@ -266,7 +250,7 @@ void NodeManager::getSensorData(uint8_t * data, uint8_t * len){
             sensorHasData[i] = false;
             uint8_t tempData[20];
             uint8_t len = 0;
-            this->sensorList[i].readMeasurementData(tempData, &len);
+            this->sensorList[i].readMeasurementData(tempData, &len); // if  this is called sensor wakes up again?
             SerialAT.print("Sensor ");
             SerialAT.print(i);
             SerialAT.print(" data: ");
@@ -437,6 +421,7 @@ void NodeManager::processAtCommands(void){
             // Set sensor low threshold level 
             if(strstr(specific, "TEST")){
                 SerialAT.println("OK");
+                this->configureSensors();
                 commandProcessed = true;
             }
         }
@@ -454,3 +439,22 @@ void NodeManager::processAtCommands(void){
     }
 }
 
+void NodeManager::configureSensors(void){
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        SerialAT.print("Sensor ");
+        SerialAT.println(i);
+        // for each sensor metric
+        for(uint8_t j=0; j<this->sensorList[i].getNrMetrics(); j++){
+            // set thresholds
+            uint8_t enabled;
+            uint16_t tll;
+            uint16_t tlh;
+            this->nvConfig->getSensorThresholdSettings(i, j, &enabled, &tll, &tlh);
+            this->sensorList[i].setTresholds(j, enabled, tll, tlh);
+            // set poll interval
+            uint16_t poll;
+            this->nvConfig->getSensorPollInterval(i, j, &poll);
+            this->sensorList[i].setPollInterval(j, poll);
+        }
+    }
+}

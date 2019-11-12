@@ -40,6 +40,7 @@ public:
   bool init(uint8_t iicAddress);
   bool toggleInterrupt(void);
   void setIntPin(uint8_t pinNr);
+  void setCbNr(uint8_t nr);
 
   bool setTresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh);
   bool startMeasurement(void);
@@ -57,6 +58,7 @@ public:
   uint8_t getSensorType(void);
   uint8_t getNrMetrics(void);
   uint8_t getIntPin(void);
+  uint8_t getCbNr(void);
   
 private:
   bool requestSensorType(void);
@@ -66,6 +68,7 @@ protected:
   uint8_t sensorType;
   uint8_t iicAddress;
   uint8_t intPin;
+  uint8_t cbNr;
   
   uint8_t nrMetrics;  // nr of different metrics supported by the sensor, each metric measurement takes up 2 bytes
   uint8_t mLen;       // (max nr of measurement bytes=) nrMetrics * 2 

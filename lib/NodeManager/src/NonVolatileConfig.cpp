@@ -123,7 +123,7 @@ bool NonVolatileConfig::createNewConfig(uint8_t nrSensors, Sensor * list){
         // init i-th sensor metric settings
         for(int j=0; j<this->sensorConfigSettings[i].nrMetrics; j++){
             // poll interval
-            this->sensorConfigSettings[i].settings[j].pollInterval = 0xFFFF;
+            this->sensorConfigSettings[i].settings[j].pollInterval = 0;
             
             // threshold enabled
             this->sensorConfigSettings[i].settings[j].thresholdEnabled = 0;
@@ -225,6 +225,7 @@ void NonVolatileConfig::storeSensorConfig(void){
     }
 
     EEPROM.commit();
+    this->printSensorConfig();
 }
 
 void NonVolatileConfig::printSensorConfig(void){

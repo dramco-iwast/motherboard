@@ -243,8 +243,16 @@ uint8_t Sensor::getIntPin(void){
   return this->intPin;
 }
 
+uint8_t Sensor::getCbNr(void){
+  return this->cbNr;
+}
+
 void Sensor::setIntPin(uint8_t pinNr){
   this->intPin = pinNr;
+}
+
+void Sensor::setCbNr(uint8_t cb){
+  this->cbNr = cb;
 }
 
 /* Private methods ************************************************************/

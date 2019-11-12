@@ -34,6 +34,7 @@ void loop() {
   nm.loop();
 
   if(nm.dataAvailable()){
+    SerialUSB.print("Data available!");
     nm.getSensorData((uint8_t *)0, (uint8_t *)0);
   }
 

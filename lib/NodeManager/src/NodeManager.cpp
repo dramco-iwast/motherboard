@@ -151,11 +151,12 @@ void NodeManager::begin(void){
         else{
             // detect which interrupt pin the i-th sensor is connected to
             this->sensorList[i].toggleInterrupt();
-            delay(1); // give sensor time to toggle pin
-            for(uint8_t pin=0; pin<MAX_NR_OF_SENSORS; pin++){
-                if(digitalRead(intPins[pin]) == LOW){
-                    this->sensorList[i].setIntPin(intPins[pin]);
-                    attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[i], FALLING);
+            delay(1);
+            for(uint8_t s=0; s<MAX_NR_OF_SENSORS; s++){
+                if(digitalRead(intPins[s]) == LOW){
+                    this->sensorList[i].setIntPin(intPins[s]);
+                    this->sensorList[i].setCbNr(s);
+                    attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[s], FALLING);
                 }
             }
             this->sensorList[i].toggleInterrupt();
@@ -168,6 +169,8 @@ void NodeManager::begin(void){
             SerialAT.println(this->sensorList[i].getNrMetrics());
             SerialAT.print(" - int pin: ");
             SerialAT.println(this->sensorList[i].getIntPin());
+            SerialAT.print(" - callback: cb");
+            SerialAT.println(this->sensorList[i].getCbNr());
         }
         delay(20);
     }
@@ -246,8 +249,9 @@ bool NodeManager::dataAvailable(void){
 
 void NodeManager::getSensorData(uint8_t * data, uint8_t * len){
     for(uint8_t i=0; i<this->nrSensors; i++){
-        if(sensorHasData[i]){
-            sensorHasData[i] = false;
+        uint8_t cbIndex = this->sensorList[i].getCbNr();
+        if(sensorHasData[cbIndex]){
+            sensorHasData[cbIndex] = false;
             uint8_t tempData[20];
             uint8_t len = 0;
             this->sensorList[i].readMeasurementData(tempData, &len); // if  this is called sensor wakes up again?
@@ -419,11 +423,15 @@ void NodeManager::processAtCommands(void){
             }
 
             // Set sensor low threshold level 
-            if(strstr(specific, "TEST")){
+            if(strstr(specific, "TEST1")){
                 SerialAT.println("OK");
+                uint8_t buf[] = {0x00, 0x00};
+                uint8_t len = 0;
+
                 this->configureSensors();
                 commandProcessed = true;
             }
+
         }
 
         if(!commandProcessed){

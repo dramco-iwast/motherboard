@@ -24,7 +24,9 @@
 
 #include <FlashAsEEPROM.h>
 #include <Wire.h>
+#include <LowPower.h>
 #include "NodeManager.h"
+#include "DebugSerial.h"
 
 // Maximum number of sensors that is being supported
 #define MAX_NR_OF_SENSORS               6
@@ -33,59 +35,107 @@
 #define SENSOR_IIC_BASE_ADDRESS         0x60
 #define SENSOR_IIC_END_ADDRESS          0x6F
 
+
 // List of interrupt pins
 uint8_t intPins[MAX_NR_OF_SENSORS] = {A3, A4, 8, 9, 38, 3};
 
 volatile bool sensorHasData[MAX_NR_OF_SENSORS] = {false, false, false, false, false, false};
+volatile bool rtcWakeUp = false;
 
-void sensor0Callback(void){
+// rtc interrupt callback
+void rtcCallback(void){
+    rtcWakeUp = true;
+    DEBUG.println("periodic wake-up");
+}
+
+// pin interrupt callbacks
+void intPin0Callback(void){
+    // ignore 'high' or 'rising edge' interrupt
+    if(digitalRead(intPins[0])) return;
+
+    // 'low' interrupt -> wait until sensors sets pin 'high' again
+    while(!digitalRead(intPins[0]));
     sensorHasData[0] = true;
-    SerialAT.println("cb0");
+    DEBUG.println("cb0");
 }
-void sensor1Callback(void){
+
+void intPin1Callback(void){
+    // ignore 'high' or 'rising edge' interrupt
+    if(digitalRead(intPins[1])) return;
+
+    // 'low' interrupt -> wait until sensors sets pin 'high' again
+    while(!digitalRead(intPins[1]));
     sensorHasData[1] = true;
-    SerialAT.println("cb1");
+    DEBUG.println("cb1");
 }
-void sensor2Callback(void){
+
+void intPin2Callback(void){
+    // ignore 'high' or 'rising edge' interrupt
+    if(digitalRead(intPins[2])) return;
+
+    // 'low' interrupt -> wait until sensors sets pin 'high' again
+    while(!digitalRead(intPins[2]));
     sensorHasData[2] = true;
-    SerialAT.println("cb2");
+    DEBUG.println("cb2");
 }
-void sensor3Callback(void){
+
+void intPin3Callback(void){
+    // ignore 'high' or 'rising edge' interrupt
+    if(digitalRead(intPins[3])) return;
+
+    // 'low' interrupt -> wait until sensors sets pin 'high' again
+    while(!digitalRead(intPins[3]));
     sensorHasData[3] = true;
-    SerialAT.println("cb3");
+    DEBUG.println("cb3");
 }
-void sensor4Callback(void){
+
+void intPin4Callback(void){
+    // ignore 'high' or 'rising edge' interrupt
+    if(digitalRead(intPins[4])) return;
+
+    // 'low' interrupt -> wait until sensors sets pin 'high' again
+    while(!digitalRead(intPins[4]));
     sensorHasData[4] = true;
-    SerialAT.println("cb4");
+    DEBUG.println("cb4");
 }
-void sensor5Callback(void){
+
+void intPin5Callback(void){
+    // ignore 'high' or 'rising edge' interrupt
+    if(digitalRead(intPins[5])) return;
+
+    // 'low' interrupt -> wait until sensors sets pin 'high' again
+    while(!digitalRead(intPins[5]));
     sensorHasData[5] = true;
-    SerialAT.println("cb5");
+    DEBUG.println("cb5");
+}
+
+// dummy callback for pin interrupt
+void nullCb(void){
+    return;
 }
 
 typedef void (*SensorCb)(void);
 SensorCb sensorCallbacks[MAX_NR_OF_SENSORS] = {
-    sensor0Callback,
-    sensor1Callback,
-    sensor2Callback,
-    sensor3Callback,
-    sensor4Callback,
-    sensor5Callback
+    intPin0Callback,
+    intPin1Callback,
+    intPin2Callback,
+    intPin3Callback,
+    intPin4Callback,
+    intPin4Callback
 };
 
+// for debugging purposes
 void DUMP_EEPROM(int size){
-    SerialAT.println("EEPROM DUMP");
+    DEBUG.println("EEPROM DUMP");
     for(int i=0; i<size; i++){
-        SerialAT.print("A: ");
-        SerialAT.print(i, HEX);
-        SerialAT.print(" - ");
-        SerialAT.println(EEPROM.read(i), HEX);
+        DEBUG.print("A: ");
+        DEBUG.print(i, HEX);
+        DEBUG.print(" - ");
+        DEBUG.println(EEPROM.read(i), HEX);
     }
 }
 
 NodeManager::NodeManager(uint16_t id){
-
-//#warning "NodeManager class uses SerialAT."
 
     this->id = id;
     sprintf(this->idStr, "%04X", id);
@@ -97,17 +147,23 @@ NodeManager::NodeManager(uint16_t id){
     this->atTimerEnabled = true;
     this->conFigMode = true;
 
+    this->payloadBufferFill = 0;
+
     this->nvConfig = new NonVolatileConfig();
 }
 
 void NodeManager::begin(void){
-    SerialAT.println("Initializing NodeManager...");
+    DEBUG.println(F("Initializing NodeManager..."));
 
     DUMP_EEPROM(32);
 
     // 1. Initialize interrupts pins
     for(uint8_t i=0; i<MAX_NR_OF_SENSORS; i++){
         pinMode(intPins[i], INPUT_PULLUP);
+        // assign dummy interrupt on rising edge
+        // this is necessary because otherwise, using the "Low-Power"-lib seems to result
+        // unhandled interrupts
+        attachInterrupt(intPins[i], nullCb, RISING);
     }
 
     // 2. Initialize I2C bus
@@ -124,13 +180,13 @@ void NodeManager::begin(void){
     // Test all addresses for a response
     for(uint8_t address=SENSOR_IIC_BASE_ADDRESS; address<SENSOR_IIC_END_ADDRESS+1; address++){
         if(t->pollAddress(address)){
-            SerialAT.print("Found sensor at address: 0x");
-            SerialAT.println(address, HEX);
+            DEBUG.print(F("Found sensor at address: 0x"));
+            DEBUG.println(address, HEX);
             if(detectedCount<MAX_NR_OF_SENSORS){
                 detectedSensors[detectedCount++] = address;
             }
             else{
-                SerialAT.println("Maximum number of sensors exceeded");
+                DEBUG.println(F("Maximum number of sensors exceeded"));
             }
         }
     }
@@ -139,44 +195,62 @@ void NodeManager::begin(void){
 
     // Set number of sensors connected to the motherboard
     this->nrSensors = detectedCount;
+    DEBUG.print(F("Scan has found "));
+    DEBUG.print(this->nrSensors);
+    DEBUG.println(F(" sensors."));
 
     // Now create the actual list of sensors ...
     this->sensorList = new Sensor[this->nrSensors];
     // ... and initialize this list
     for(uint8_t i=0; i<this->nrSensors; i++){
         if(!this->sensorList[i].init(detectedSensors[i])){
-            SerialAT.print("Failed to initialize sensor at address: 0x");
-            SerialAT.println(detectedSensors[i], HEX);
+            DEBUG.print(F("Failed to initialize sensor at address: 0x"));
+            DEBUG.println(detectedSensors[i], HEX);
         }
         else{
             // detect which interrupt pin the i-th sensor is connected to
             this->sensorList[i].toggleInterrupt();
             delay(1);
             for(uint8_t s=0; s<MAX_NR_OF_SENSORS; s++){
+                DEBUG.print("testing pin ");
+                DEBUG.print(intPins[s]);
                 if(digitalRead(intPins[s]) == LOW){
+                    DEBUG.println(" - response");
+                    // set high again before we attach interrupt, or it will block forever
+                    this->sensorList[i].toggleInterrupt();
+
+                    // update sensor information
                     this->sensorList[i].setIntPin(intPins[s]);
                     this->sensorList[i].setCbNr(s);
-                    attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[s], FALLING);
+ 
+                    // detach previously attached 'dummy' callback
+                    detachInterrupt(this->sensorList[i].getIntPin());
+
+                    // attach pin interrupt callback
+                    attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[s], LOW);
+                }
+                else{
+                    DEBUG.println("- no response");
                 }
             }
-            this->sensorList[i].toggleInterrupt();
-
-            SerialAT.print("Sensor: ");
-            SerialAT.println(i+1);
-            SerialAT.print(" - type: 0x");
-            SerialAT.println(this->sensorList[i].getSensorType(), HEX);
-            SerialAT.print(" - metrics: ");
-            SerialAT.println(this->sensorList[i].getNrMetrics());
-            SerialAT.print(" - int pin: ");
-            SerialAT.println(this->sensorList[i].getIntPin());
-            SerialAT.print(" - callback: cb");
-            SerialAT.println(this->sensorList[i].getCbNr());
+            
+            // print some debug information
+            DEBUG.print("Sensor: ");
+            DEBUG.println(i+1);
+            DEBUG.print(" - type: 0x");
+            DEBUG.println(this->sensorList[i].getSensorType(), HEX);
+            DEBUG.print(" - metrics: ");
+            DEBUG.println(this->sensorList[i].getNrMetrics());
+            DEBUG.print(" - int pin: ");
+            DEBUG.println(this->sensorList[i].getIntPin());
+            DEBUG.print(" - callback: cb");
+            DEBUG.println(this->sensorList[i].getCbNr());
         }
         delay(20);
     }
 
     // 4. Read a previous configuration from EEPROM
-    SerialAT.println("Reading previous config from EEPROM ...");
+    DEBUG.println(F("Reading previous config from EEPROM ..."));
     this->nvConfig->readSensorConfig();
     this->nvConfig->printSensorConfig();
 
@@ -192,23 +266,23 @@ void NodeManager::begin(void){
     // 6. If list of sensors from the previous configuration differs from the currently installed sensors
     // we completely discard the previous configuration and build a new one based on the sensorList
     if(diffDetected){
-        SerialAT.println("Connected sensors don't match with previous config.");
-        SerialAT.println("Creating new config ...");
+        DEBUG.println(F("Connected sensors don't match with previous config."));
+        DEBUG.println(F("Creating new config ..."));
         // discard old config
         this->nvConfig->discardConfig();
         // build new config (in RAM)
         this->nvConfig->createNewConfig(this->nrSensors, this->sensorList);
-        SerialAT.println("Updating non volatile config:");
+        DEBUG.println(F("Updating non volatile config:"));
         this->nvConfig->storeSensorConfig();
     }
     else{
-        SerialAT.println("Connected sensors match with previous config.");
+        DEBUG.println(F("Connected sensors match with previous config."));
     }
     this->nvConfig->printSensorConfig();
 
     this->atStartTime = millis();
 
-    SerialAT.println("Done\n");
+    DEBUG.println("Done\n");
 }
 
 void NodeManager::runConfigMode(bool forever){
@@ -223,48 +297,123 @@ void NodeManager::runConfigMode(bool forever){
         this->processAtCommands();
     }
 
-    SerialAT.println("Configuring connected sensors ...");
+    // Detach USB interface
+    SerialAT.end();
+    delay(1000);
+	USBDevice.detach();
+
+    DEBUG.println("Configuring connected sensors ...");
     this->configureSensors();
 
-    SerialAT.println("Using configuration:");
+    DEBUG.println("Using configuration:");
     this->nvConfig->storeSensorConfig();
-
-    SerialAT.println("Exit config mode.");
-
     delete this->nvConfig;
+
+    DEBUG.println("Configuring RTC ...");
+    
+    this->rtc = new RTCZero();
+    this->rtc->begin();
+
+    this->rtc->setTime(0, 0, 0);
+    this->rtc->setDate(0, 0, 0);
+
+    this->rtc->setAlarmSeconds(0);
+    this->rtc->enableAlarm(RTCZero::MATCH_SS);
+
+    this->rtc->attachInterrupt(rtcCallback);
+
+    DEBUG.println("Exit config mode.");
+    delay(10);
 }
 
 void NodeManager::loop(void){
-    // low-power loop (but not right now)
-    delay(1000);
-    for(uint8_t i=0; i<this->nrSensors; i++){
-        this->sensorList[i].loop();
+    // sleep until wake-up event occurs
+    DEBUG.println(F("going to sleep"));
+    DEBUG.flush();
+
+    // Enter standby mode
+    rtc->standbyMode();
+
+    // if we get here, either sensor pin interrupt or rtc interrupt has taken place
+    if(rtcWakeUp){
+        // update poll timers for all sensors
+        for(uint8_t i=0; i<this->nrSensors; i++){
+            DEBUG.print("sensor ");
+            DEBUG.println(i);
+            this->sensorList[i].updateTime();
+        }
+        rtcWakeUp = false;
     }
-    SerialAT.println("sleep");
+    else{
+        // get data and add to payload
+        this->getSensorData();
+    }
+
 }
 
+uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){
+    if(!sendBuffer){
+        DEBUG.println("Buffer = NULL");
+        return 0;
+    }
+    uint8_t bytesToCopy = 0;
+
+    if(this->payloadBufferFill>bufferSize){
+        bytesToCopy = bufferSize;
+    }
+    else{
+        bytesToCopy = this->payloadBufferFill;
+    }
+
+    memcpy(sendBuffer, this->payloadBuffer, bytesToCopy);
+
+    DEBUG.print("Copied ");
+    DEBUG.print(bytesToCopy);
+    DEBUG.println("bytes.");
+    payloadBufferFill = 0;
+
+    return bytesToCopy;
+}
+
+uint8_t NodeManager::payloadAvailable(void){
+    return payloadBufferFill;
+}
+
+/*
 bool NodeManager::dataAvailable(void){
     return (sensorHasData[0] | sensorHasData[1] | sensorHasData[2] | sensorHasData[3] | sensorHasData[4] | sensorHasData[5]);
-}
+}*/
 
-void NodeManager::getSensorData(uint8_t * data, uint8_t * len){
+// TODO: make private -> create packet
+void NodeManager::getSensorData(void){
     for(uint8_t i=0; i<this->nrSensors; i++){
         uint8_t cbIndex = this->sensorList[i].getCbNr();
         if(sensorHasData[cbIndex]){
             sensorHasData[cbIndex] = false;
             uint8_t tempData[20];
             uint8_t len = 0;
-            this->sensorList[i].readMeasurementData(tempData, &len); // if  this is called sensor wakes up again?
-            SerialAT.print("Sensor ");
-            SerialAT.print(i);
-            SerialAT.print(" data: ");
-            for(uint8_t j=0; j<len; j++){
-                if(tempData[j]<16){
-                    SerialAT.print("0");
+            this->sensorList[i].readMeasurementData(tempData, &len);
+
+            if((payloadBufferFill+len)<PAYLOAD_BUFFER_SIZE){
+                // copy data to payload buffer
+                payloadBuffer[payloadBufferFill++] = i+1;
+
+                //DEBUG.print("Sensor ");
+                //DEBUG.print(i);
+                //DEBUG.print(" data: ");
+                for(uint8_t j=0; j<len; j++){
+                    /*if(tempData[j]<16){
+                        DEBUG.print("0");
+                    }
+                    DEBUG.print(tempData[j], HEX);*/
+
+                    payloadBuffer[payloadBufferFill++] = tempData[j];
                 }
-                SerialAT.print(tempData[j], HEX);
+                //DEBUG.println();
             }
-            SerialAT.println();
+            else{
+                DEBUG.println(F("Payload buffer is full!"));
+            }
         }
     }
 }
@@ -423,12 +572,11 @@ void NodeManager::processAtCommands(void){
             }
 
             // Set sensor low threshold level 
-            if(strstr(specific, "TEST1")){
+            if(strstr(specific, "TEST")){
                 SerialAT.println("OK");
-                uint8_t buf[] = {0x00, 0x00};
-                uint8_t len = 0;
 
-                this->configureSensors();
+                // you can put code for testing here
+                //this->configureSensors();
                 commandProcessed = true;
             }
 
@@ -449,8 +597,8 @@ void NodeManager::processAtCommands(void){
 
 void NodeManager::configureSensors(void){
     for(uint8_t i=0; i<this->nrSensors; i++){
-        SerialAT.print("Sensor ");
-        SerialAT.println(i);
+        DEBUG.print("Sensor ");
+        DEBUG.println(i);
         // for each sensor metric
         for(uint8_t j=0; j<this->sensorList[i].getNrMetrics(); j++){
             // set thresholds

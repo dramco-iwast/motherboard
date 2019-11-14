@@ -31,6 +31,7 @@
 #include "Sensor.h"
 
 #define AT_COMMAND_MAX_SIZE 32
+#define PAYLOAD_BUFFER_SIZE 64
 
 #define SerialAT SerialUSB
 
@@ -51,12 +52,14 @@ public:
 
     // main operation
     void loop(void);
-    bool dataAvailable(void);
-    void getSensorData(uint8_t * data, uint8_t * len);
+    uint8_t payloadAvailable(void); // return payload size
+    uint8_t getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize);
 
 private:
     void processAtCommands(void);
     void configureSensors(void);
+    //bool dataAvailable(void);
+    void getSensorData(void);
 
     NonVolatileConfig * nvConfig;
 
@@ -73,13 +76,15 @@ private:
     uint8_t atFill;
     bool commandReceived;   // whether the string is complete
 
-
-
     unsigned long atStartTime;
     bool conFigMode;
     bool atTimerEnabled;
 
+    uint8_t payloadBuffer[PAYLOAD_BUFFER_SIZE];
+    uint8_t payloadBufferFill;
+    //bool payloadAvailable;
 
+    RTCZero * rtc;
 };
 
 

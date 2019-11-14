@@ -23,8 +23,8 @@
 
 
 #include <Wire.h>
-
-#include <Sensor.h>
+#include "Sensor.h"
+#include "DebugSerial.h"
 
 #define POLL_RETRIES  2
 
@@ -210,19 +210,30 @@ void Sensor::setPollInterval(uint8_t metric, uint16_t poll){
 /* start a new measurement if poll timer has expired
  * TODO: metric filtering
  */
-void Sensor::loop(){
+void Sensor::updateTime(){
   for(uint8_t i=0; i<this->nrMetrics; i++){
+    DEBUG.print(" - metric ");
+    DEBUG.print(i);
+    DEBUG.print(": ");
     if(this->pollInterval[i] > 0){
       this->pollTimer[i]--;
       if(this->pollTimer[i] == 0){
         this->pollTimer[i] = this->pollInterval[i];
         this->startMeasurement(); // TODO: specify metric
-        SerialUSB.print("measure ");
-        SerialUSB.print(this->mLen);
-        SerialUSB.println(" bytes");
+        // start measurement results in pin interrupt
+        DEBUG.print("measure ");
+        DEBUG.print(this->mLen);
+        DEBUG.println(" bytes");
+      }
+      else{
+        DEBUG.println("timer updated");
       }
     }
+    else{
+      DEBUG.println("no polling");
+    }
   }
+  DEBUG.println();
 }
 
 /* Access to sensor attributes ************************************************/

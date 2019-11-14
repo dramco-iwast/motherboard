@@ -45,7 +45,7 @@ public:
   bool setTresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh);
   bool startMeasurement(void);
   void setPollInterval(uint8_t metric, uint16_t poll);
-  void loop(void);
+  void updateTime(void);
 
 // start block not tested ===========================
   

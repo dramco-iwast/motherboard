@@ -31,16 +31,10 @@
 #define RN2483_RECEIVE_BUFFER_SIZE  64
 
 #define RN2483_RESET_PIN            5 
-//#define RN2483_TX_PIN               2 // D2 on MKR ZERO
-//#define RN2483_TX_PAD               UART_TX_PAD_2
-//#define RN2483_RX_PIN               3 // D3 on MKR ZERO
-//#define RN2483_RX_PAD               SERCOM_RX_PAD_3
 
 #define RN2483_BAUD					57600
 #define SerialRN					Serial1
 
-//#define RN2483_SERCOM               &sercom0
-//#define RN2483_IRQ_Handler			SERCOM0_Handler
 
 typedef enum powerSettings{
     RN2483_POWER_14DBM = 1,

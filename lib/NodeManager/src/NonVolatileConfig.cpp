@@ -24,11 +24,7 @@
 
 #include <FlashAsEEPROM.h>
 #include "NonVolatileConfig.h"
-
-#define DEBUGGING
-#ifdef DEBUGGING
-#define DEBUG SerialUSB
-#endif
+#include "DebugSerial.h"
 
 // Non-Volatile storage offsets
 #define NR_SENSORS_OFFSET               0
@@ -65,12 +61,15 @@ bool NonVolatileConfig::sensorInConfig(uint8_t id, uint8_t type){
     if(id<this->nrSensors){
         DEBUG.print("id in config, type = 0x");
         DEBUG.println(this->sensorConfigSettings[id].type, HEX);
+
         if(this->sensorConfigSettings[id].type == type){
             DEBUG.println("MATCH");
             return true;
         }
     }
+
     DEBUG.println("NO MATCH");
+
     return false;
 }
 
@@ -85,9 +84,9 @@ void NonVolatileConfig::discardConfig(void){
     }
 
     this->nrSensors = 0;
-#ifdef DEBUGGING
+
     DEBUG.println("RAM freed");
-#endif
+
 }
 
 bool NonVolatileConfig::createNewConfig(uint8_t nrSensors, Sensor * list){
@@ -95,9 +94,7 @@ bool NonVolatileConfig::createNewConfig(uint8_t nrSensors, Sensor * list){
 
     this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
     if(this->sensorConfigSettings == NULL){
-#ifdef DEBUGGING
         DEBUG.println("Malloc failed.");
-#endif
         return false;
     }
 
@@ -114,9 +111,7 @@ bool NonVolatileConfig::createNewConfig(uint8_t nrSensors, Sensor * list){
         // allocate space to store the settings
         this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrMetrics);
         if(this->sensorConfigSettings[i].settings == NULL){
-#ifdef DEBUGGING
             DEBUG.println("Malloc settings failed.");
-#endif
             return false;
         }
 
@@ -229,7 +224,6 @@ void NonVolatileConfig::storeSensorConfig(void){
 }
 
 void NonVolatileConfig::printSensorConfig(void){
-#ifdef DEBUGGING
     DEBUG.print("Nr sensors: ");
     DEBUG.println(this->nrSensors);
 
@@ -255,7 +249,6 @@ void NonVolatileConfig::printSensorConfig(void){
             DEBUG.println(this->sensorConfigSettings[i].settings[j].thresholdHigh);
         }
     }
-#endif
 }
 
 
@@ -416,9 +409,7 @@ bool NonVolatileConfig::readSensorConfig(void){
 
     this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
     if(this->sensorConfigSettings == NULL){
-#ifdef DEBUGGING
         DEBUG.println("Malloc failed.");
-#endif
         return false;
     }
 
@@ -439,9 +430,7 @@ bool NonVolatileConfig::readSensorConfig(void){
         // allocate space to store the settings
         this->sensorConfigSettings[i].settings = (MetricSettings_t *) malloc(sizeof(MetricSettings_t) * this->sensorConfigSettings[i].nrMetrics);
         if(this->sensorConfigSettings[i].settings == NULL){
-#ifdef DEBUGGING
             DEBUG.println("Malloc settings failed.");
-#endif
             return false;
         }
 

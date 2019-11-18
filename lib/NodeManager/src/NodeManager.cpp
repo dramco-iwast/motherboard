@@ -332,7 +332,8 @@ void NodeManager::loop(void){
     DEBUG.flush();
 
     // Enter standby mode
-    rtc->standbyMode();
+    LowPower.standby();
+    //rtc->standbyMode();
 
     // if we get here, either sensor pin interrupt or rtc interrupt has taken place
     if(rtcWakeUp){

@@ -75,7 +75,8 @@ public:
     RN2483_Modem(void);
 
     void init(void);
-    
+    void breakCondition(void);
+
     void test(void);
 
 	RN2483_Status_t macReset(void);
@@ -102,6 +103,8 @@ public:
 	RN2483_Status_t setupOTAA(LoRaSettings_t settings);
 	RN2483_Status_t setupABP(LoRaSettings_t settings);
 
+
+	RN2483_Status_t sleep(uint32_t durationMs);
 	RN2483_Status_t transmitUnconfirmed(uint8_t * data, uint8_t payloadSize);
 
 private:

@@ -62,10 +62,11 @@ void RN2483_Modem::init(void){ // Setup with autobaud
 	delay(250);
 }
 
-// reset
-
-
-
+void RN2483_Modem::breakCondition(void){
+	/*digitalWrite(RN2483_RX_PIN, LOW);
+	delay(1);
+	digitalWrite(RN2483_RX_PIN, HIGH);*/
+}
 
 RN2483_Status_t RN2483_Modem::macReset(void){
 	sprintf(this->commandBuffer, "mac reset 868\r\n");
@@ -278,9 +279,18 @@ RN2483_Status_t RN2483_Modem::transmitUnconfirmed(uint8_t * data, uint8_t payloa
 		return MAC_ERR;
 	}
 	//StringToHexString(data, payloadSize/2, &decodedPayload);
-	sprintf(commandBuffer, "mac tx uncnf 1 %s\r\n", encodedPayload);
+	sprintf(this->commandBuffer, "mac tx uncnf 1 %s\r\n", encodedPayload);
 	free(encodedPayload);
 	return this->processMacCommand(true);
+}
+
+RN2483_Status_t RN2483_Modem::sleep(uint32_t durationMs){
+	if(durationMs < 100){
+		durationMs = 100;
+	}
+
+	sprintf(this->commandBuffer, "sys sleep %l\r\n", durationMs);
+	return this->processMacCommand(false);
 }
 
 

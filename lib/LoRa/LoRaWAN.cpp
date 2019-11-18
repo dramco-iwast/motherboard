@@ -58,9 +58,13 @@ void LoRaWAN::join(void){
     else{
         this->status = JOINED;
     }
+
+    rn2483.sleep(3600000);
 }
 
 void LoRaWAN::sendData(uint8_t * packet, uint8_t size){
+    rn2483.breakCondition();
+
     if(this->status == JOINED){
         // send data
         rn2483.transmitUnconfirmed(packet, size);
@@ -72,4 +76,7 @@ void LoRaWAN::sendData(uint8_t * packet, uint8_t size){
         // send data
         rn2483.transmitUnconfirmed(packet, size);
     }
+
+    // sleep
+    rn2483.sleep(3600000);
 }

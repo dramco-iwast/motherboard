@@ -573,11 +573,20 @@ void NodeManager::processAtCommands(void){
             }
 
             // Set sensor low threshold level 
-            if(strstr(specific, "TEST")){
+            if(strstr(specific, "TEST1")){ // AT+TEST1
                 SerialAT.println("OK");
 
                 // you can put code for testing here
-                //this->configureSensors();
+                this->configureSensors();
+                commandProcessed = true;
+            }
+
+            // Set sensor low threshold level 
+            if(strstr(specific, "TEST2")){ // AT+TEST2
+                SerialAT.println("OK");
+
+                // you can put code for testing here
+                this->sensorList[0].readMeasurementData();
                 commandProcessed = true;
             }
 

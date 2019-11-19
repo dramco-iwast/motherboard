@@ -23,8 +23,8 @@ void setup() {
 
   // put your setup code here, to run once:
   nm.begin();
-  nm.runConfigMode(); // run config
-  //nm.runConfigMode(true); // run config forever
+  //nm.runConfigMode(); // run config
+  nm.runConfigMode(true); // run config forever
 
   // join lora network
   lora.join();

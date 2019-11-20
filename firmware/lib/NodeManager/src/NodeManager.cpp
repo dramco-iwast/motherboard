@@ -24,7 +24,7 @@
 
 #include <FlashAsEEPROM.h>
 #include <Wire.h>
-#include <LowPower.h>
+#include <ArduinoLowPower.h>
 #include "NodeManager.h"
 #include "DebugSerial.h"
 
@@ -163,7 +163,7 @@ void NodeManager::begin(void){
         // assign dummy interrupt on rising edge
         // this is necessary because otherwise, using the "Low-Power"-lib seems to result
         // unhandled interrupts
-        attachInterrupt(intPins[i], nullCb, RISING);
+        //attachInterrupt(intPins[i], nullCb, RISING);
     }
 
     // 2. Initialize I2C bus
@@ -224,10 +224,11 @@ void NodeManager::begin(void){
                     this->sensorList[i].setCbNr(s);
  
                     // detach previously attached 'dummy' callback
-                    detachInterrupt(this->sensorList[i].getIntPin());
+                    //detachInterrupt(this->sensorList[i].getIntPin());
 
                     // attach pin interrupt callback
-                    attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[s], LOW);
+                    //attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[s], LOW);
+                    LowPower.attachInterruptWakeup(this->sensorList[i].getIntPin(), sensorCallbacks[s], FALLING);
                 }
                 else{
                     DEBUG.println("- no response");
@@ -289,7 +290,7 @@ void NodeManager::runConfigMode(bool forever){
     while(this->conFigMode || forever){
         // disable at commands after 10000
         if(this->atTimerEnabled){
-            if(millis() - this->atStartTime > 10000){
+            if(millis() - this->atStartTime > CONFIG_DURATION_MS){
                 this->conFigMode = false;
             }
         }
@@ -309,18 +310,8 @@ void NodeManager::runConfigMode(bool forever){
     this->nvConfig->storeSensorConfig();
     delete this->nvConfig;
 
-    DEBUG.println("Configuring RTC ...");
-    
-    this->rtc = new RTCZero();
-    this->rtc->begin();
-
-    this->rtc->setTime(0, 0, 0);
-    this->rtc->setDate(0, 0, 0);
-
-    this->rtc->setAlarmSeconds(0);
-    this->rtc->enableAlarm(RTCZero::MATCH_SS);
-
-    this->rtc->attachInterrupt(rtcCallback);
+    DEBUG.println("Attach RTC callback.");
+    LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
 
     DEBUG.println("Exit config mode.");
     delay(10);
@@ -332,15 +323,14 @@ void NodeManager::loop(void){
     DEBUG.flush();
 
     // Enter standby mode
-    LowPower.standby();
-    //rtc->standbyMode();
+    LowPower.sleep(1000);
 
     // if we get here, either sensor pin interrupt or rtc interrupt has taken place
     if(rtcWakeUp){
         // update poll timers for all sensors
         for(uint8_t i=0; i<this->nrSensors; i++){
-            DEBUG.print("sensor ");
-            DEBUG.println(i);
+            /*DEBUG.print("sensor ");
+            DEBUG.println(i);*/
             this->sensorList[i].updateTime();
         }
         rtcWakeUp = false;
@@ -586,7 +576,7 @@ void NodeManager::processAtCommands(void){
                 SerialAT.println("OK");
 
                 // you can put code for testing here
-                this->sensorList[0].readMeasurementData();
+               //this->sensorList[0].readMeasurementData();
                 commandProcessed = true;
             }
 

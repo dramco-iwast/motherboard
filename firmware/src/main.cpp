@@ -19,15 +19,15 @@ void setup() {
   SerialAT.begin(115200); 
   
   // configure lora (no networking yet)
-  lora.begin(settings);
+ // lora.begin(settings);
 
   // put your setup code here, to run once:
   nm.begin();
-  //nm.runConfigMode(); // run config
-  nm.runConfigMode(true); // run config forever
+  nm.runConfigMode(); // run config
+  //nm.runConfigMode(true); // run config forever
 
   // join lora network
-  lora.join();
+ // lora.join();
 }
 
 void loop() {
@@ -77,7 +77,7 @@ To make this work for us:
 */
 
   // Handle errors due to channel not free
-    lora.sendData(buf, pSize);
+  //  lora.sendData(buf, pSize);
   }
 
 }

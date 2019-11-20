@@ -26,9 +26,10 @@
 #define __NODE_MANAGER_H__
 
 #include <Arduino.h>
-#include <RTCZero.h>
 #include "NonVolatileConfig.h"
 #include "Sensor.h"
+
+#define CONFIG_DURATION_MS  30000
 
 #define AT_COMMAND_MAX_SIZE 32
 #define PAYLOAD_BUFFER_SIZE 64
@@ -84,7 +85,7 @@ private:
     uint8_t payloadBufferFill;
     //bool payloadAvailable;
 
-    RTCZero * rtc;
+    //RTCZero * rtc;
 };
 
 

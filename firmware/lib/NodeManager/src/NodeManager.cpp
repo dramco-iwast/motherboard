@@ -428,6 +428,7 @@ void NodeManager::processAtCommands(void){
     // process command buffer
     if(this->commandReceived) {
         bool commandProcessed = false;
+        AT_ErrorCodes_t errorCode = AT_UNDEFINED_ERROR;
         // check for at command
         if(strstr(this->atCommand, "AT+")){
             char * specific = this->atCommand+3;
@@ -476,6 +477,9 @@ void NodeManager::processAtCommands(void){
                     SerialAT.println(pollInterval);
                     commandProcessed = true;
                 }
+                else{
+                    errorCode = AT_INVALID_ID;
+                }
             }
 
             // Set sensor poll interval 
@@ -488,8 +492,16 @@ void NodeManager::processAtCommands(void){
                 uint16_t pol = strtol(nextNr, NULL, 10);
 
                 if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfPollInterval, pol)){
-                    SerialAT.println("OK");
-                    commandProcessed = true;
+                    if(!(pol<60)){
+                        SerialAT.println("OK");
+                        commandProcessed = true;
+                    }
+                    else{
+                        errorCode = AT_INVALID_POL;
+                    }
+                }
+                else{
+                    errorCode = AT_INVALID_ID;
                 }
             }
 
@@ -512,6 +524,9 @@ void NodeManager::processAtCommands(void){
                     SerialAT.println(tLevHigh);
                     commandProcessed = true;
                 }
+                else{
+                    errorCode = AT_INVALID_ID;
+                }
             }
 
             // Set sensor threshold enabled 
@@ -528,6 +543,12 @@ void NodeManager::processAtCommands(void){
                         SerialAT.println("OK");
                         commandProcessed = true;
                     }
+                    else{
+                        errorCode = AT_INVALID_ID;
+                    }
+                }
+                else{
+                    errorCode = AT_WRONG_VALUE;
                 }
             }
 
@@ -545,6 +566,9 @@ void NodeManager::processAtCommands(void){
                     SerialAT.println("OK");
                     commandProcessed = true;
                 }
+                else{
+                    errorCode = AT_INVALID_ID;
+                }
             }
 
             // Set sensor low threshold level 
@@ -559,6 +583,9 @@ void NodeManager::processAtCommands(void){
                 if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdHigh, tlh)){
                     SerialAT.println("OK");
                     commandProcessed = true;
+                }
+                else{
+                    errorCode = AT_INVALID_ID;
                 }
             }
 
@@ -581,10 +608,17 @@ void NodeManager::processAtCommands(void){
             }
 
         }
+        else{
+            errorCode = AT_WRONG_COMMAND;
+        }
 
         if(!commandProcessed){
-            SerialAT.println("ERROR");
+            SerialAT.print("ERROR ");
+            SerialAT.println(errorCode);
         }
+        
+        // show command received
+        DEBUG.println(this->atCommand);
 
         this->atTimerEnabled = false;
 
@@ -606,7 +640,7 @@ void NodeManager::configureSensors(void){
             uint16_t tll;
             uint16_t tlh;
             this->nvConfig->getSensorThresholdSettings(i, j, &enabled, &tll, &tlh);
-            this->sensorList[i].setTresholds(j, enabled, tll, tlh);
+            this->sensorList[i].setThresholds(j, enabled, tll, tlh);
             // set poll interval
             uint16_t poll;
             this->nvConfig->getSensorPollInterval(i, j, &poll);

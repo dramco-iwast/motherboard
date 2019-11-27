@@ -42,7 +42,7 @@ public:
   void setIntPin(uint8_t pinNr);
   void setCbNr(uint8_t nr);
 
-  bool setTresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh);
+  bool setThresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh);
   bool startMeasurement(void);
   void setPollInterval(uint8_t metric, uint16_t poll);
   void updateTime(void);

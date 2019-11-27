@@ -187,7 +187,7 @@ bool Sensor::readMeasurementData(uint8_t * buf, uint8_t * len){
 
 /* Send threshold settings for 'metric' to the sensor
  */
-bool Sensor::setTresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh){
+bool Sensor::setThresholds(uint8_t metric, uint8_t enabled, uint16_t tLevelLow, uint16_t tLevelHigh){
   uint8_t data[6];
   data[0] = metric;
   data[1] = enabled;

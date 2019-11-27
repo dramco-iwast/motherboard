@@ -22,7 +22,8 @@
  */
 
 #include "RN2483_Modem.h"
-#include "wiring_private.h"
+//#include "wiring_private.h"
+#include "DebugSerial.h"
 
 RN2483_Modem rn2483; // use rn23483 in main app;
 
@@ -290,7 +291,15 @@ RN2483_Status_t RN2483_Modem::sleep(uint32_t durationMs){
 	}
 
 	sprintf(this->commandBuffer, "sys sleep %l\r\n", durationMs);
-	return this->processMacCommand(false);
+
+	if(this->processMacCommand(false) == RN_RX_TIMEOUT){
+		DEBUG.println("RN sleeping");
+		return MAC_OK;
+	}
+	else{
+		DEBUG.println("RN sleep error");
+		return MAC_ERR;
+	}
 }
 
 

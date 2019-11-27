@@ -72,6 +72,9 @@ class LoRaWAN{
 		void join(void);
 		void sendData(uint8_t * packet, uint8_t size);
 
+		void sleep(void);
+		void wake(void);
+
     private:
 		LoRaSettings_t settings;
 		LoRaStatus_t status;

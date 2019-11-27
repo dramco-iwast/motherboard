@@ -36,6 +36,14 @@
 
 #define SerialAT SerialUSB
 
+typedef enum errorCodes{
+    AT_UNDEFINED_ERROR = 0,
+    AT_INVALID_ID = 1,
+    AT_INVALID_POL = 2,
+    AT_WRONG_VALUE = 3,
+    AT_WRONG_COMMAND = 4
+} AT_ErrorCodes_t;
+
 class NodeManager{
 
 public:

@@ -27,7 +27,8 @@ void setup() {
   //nm.runConfigMode(true); // run config forever
 
   // join lora network
- // lora.join();
+  lora.join();
+  lora.sleep();
 }
 
 void loop() {

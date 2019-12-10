@@ -24,8 +24,9 @@
  * CONFIGURE THIS!
  *****************************************************************************************/
 
-
-#define MOTHERBOARD_ID 0x474F
+#define MOTHERBOARD_ID				0x474F
+#define LORA_MAX_PAYLOAD_SIZE		48
+#define LORA_AGGREGATE_THRESHOLD	20
 
 /* LoRaWAN section ***********************************************************************/
 
@@ -50,7 +51,7 @@
  *
  * Try changing the SF to see its impact on the energy consumption
  */
-#define DEFAULT_DATA_RATE			SF8_BW125
+#define DEFAULT_DATA_RATE			SF9_BW125
 
 
 #if OVER_THE_AIR_ACTIVATION == 1

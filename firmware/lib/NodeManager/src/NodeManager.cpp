@@ -257,13 +257,18 @@ void NodeManager::begin(void){
 
     // 5. Test if connected sensors (sensorList) match the previous configuration (nvConfig)
     bool diffDetected = false;
-    for(uint8_t i=0; i<this->nrSensors; i++){
-        if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getSensorType())){
-            diffDetected = true;
-            break;
+    if(this->nvConfig->getNrSensors() != this->nrSensors){
+        diffDetected = true;
+    }
+    else{
+        for(uint8_t i=0; i<this->nrSensors; i++){
+            if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getSensorType())){
+                diffDetected = true;
+                break;
+            }
         }
     }
-
+    
     // 6. If list of sensors from the previous configuration differs from the currently installed sensors
     // we completely discard the previous configuration and build a new one based on the sensorList
     if(diffDetected){
@@ -333,9 +338,10 @@ void NodeManager::loop(void){
             DEBUG.println(i);*/
             this->sensorList[i].updateTime();
         }
+
         rtcWakeUp = false;
     }
-    else{
+    if(this->dataAvailable()){
         // get data and add to payload
         this->getSensorData();
     }
@@ -492,7 +498,7 @@ void NodeManager::processAtCommands(void){
                 uint16_t pol = strtol(nextNr, NULL, 10);
 
                 if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfPollInterval, pol)){
-                    if(!(pol<60)){
+                    if(!(pol % 60)){
                         SerialAT.println("OK");
                         commandProcessed = true;
                     }
@@ -647,4 +653,8 @@ void NodeManager::configureSensors(void){
             this->sensorList[i].setPollInterval(j, poll);
         }
     }
+}
+
+bool NodeManager::dataAvailable(void){
+    return (sensorHasData[0] | sensorHasData[1] | sensorHasData[2] | sensorHasData[3] | sensorHasData[4] | sensorHasData[5]);
 }

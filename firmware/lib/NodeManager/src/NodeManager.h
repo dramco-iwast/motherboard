@@ -67,7 +67,7 @@ public:
 private:
     void processAtCommands(void);
     void configureSensors(void);
-    //bool dataAvailable(void);
+    bool dataAvailable(void);
     void getSensorData(void);
 
     NonVolatileConfig * nvConfig;
@@ -94,6 +94,7 @@ private:
     //bool payloadAvailable;
 
     //RTCZero * rtc;
+    int aliveCounter = 0;
 };
 
 

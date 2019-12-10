@@ -21,7 +21,7 @@
  */
 
 #include "LoRaWAN.h"
-#include "RN2483_Modem.h"
+#include "DebugSerial.h"
 
 LoRaWAN lora;
 
@@ -46,42 +46,65 @@ void LoRaWAN::begin(LoRaSettings_t s){
     memcpy(this->settings.applicationSessionKey, s.applicationSessionKey, LORA_KEY_LENGTH);
     this->settings.applicationSessionKey[LORA_KEY_LENGTH] = '\0';
 
+    SerialRN.begin(RN2483_BAUD);
+
+    pinMode(LORA_LED, OUTPUT);      // configure "lora communication indicator" led pin to output
+    digitalWrite(LORA_LED, HIGH);   // "lora communication indicator" led off
+
     // initialize uart for communication with the modem
-    rn2483.init();
+    this->modem = new rn2xx3(SerialRN, RN2483_RESET_PIN, RN2483_RX_PIN, RN2483_TX_PIN);
+
+    this->modem->reset();
+    delay(100); //wait for the RN2xx3's startup message
+    SerialRN.flush();
+
+    DEBUG.println("RN2xx3 firmware version:");
+    DEBUG.println(this->modem->sysver());
+
+    this->modem->setFrequencyPlan(TTN_EU);
 }
 
 void LoRaWAN::join(void){
-    RN2483_Status_t result = rn2483.setupABP(this->settings);
-    if(result != JOIN_ACCEPTED){
-        this->status = ERROR;
-    }
-    else{
-        this->status = JOINED;
+    digitalWrite(LORA_LED, LOW);    // "lora communication indicator" led on
+    bool join_result;
+
+    String addr = String(this->settings.deviceAddress);
+    String AppSKey = String(this->settings.applicationSessionKey);
+    String NwkSKey = String(this->settings.networkSessionKey);
+
+    join_result = this->modem->initABP(addr, AppSKey, NwkSKey);
+
+    while(!join_result){
+        DEBUG.println("Unable to join. Are your keys correct, and do you have TTN coverage?");
+        delay(60000); //delay a minute before retry
+        join_result = this->modem->init();
     }
 
-    rn2483.sleep(3600000);
+    // change data rate here (set to SF7 in initABP)
+    this->modem->setDR(this->settings.dataRate);
+    DEBUG.println("Successfully joined TTN");
+    digitalWrite(LORA_LED, HIGH);   // "lora communication indicator" led off
 }
 
 void LoRaWAN::sendData(uint8_t * packet, uint8_t size){
-    rn2483.breakCondition();
+    String payload = this->hexToString(packet, size);
+    DEBUG.print("Sending data: ");
+    DEBUG.println(payload);
 
-    if(this->status == JOINED){
-        // send data
-        rn2483.transmitUnconfirmed(packet, size);
-    }
-    else{
-        // retry join
-        rn2483.joinABP();
+    digitalWrite(LORA_LED, LOW);    // "lora communication indicator" led on
+    this->modem->tx(payload);
+    digitalWrite(LORA_LED, HIGH);   // "lora communication indicator" led off
 
-        // send data
-        rn2483.transmitUnconfirmed(packet, size);
-    }
+    delete &payload;
 }
 
 void LoRaWAN::sleep(){
-    rn2483.sleep(60000);
+    this->modem->sleep(86400000); // sleep for a day, we will wake up earlier
 }
 
 void LoRaWAN::wake(){
-    
+    this->modem->autobaud();
+
+    SerialRN.readStringUntil('\n');
+    SerialRN.flush();
 }

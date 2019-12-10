@@ -24,6 +24,7 @@
 #define __LORA_WAN_H__
 
 #include <Arduino.h>
+#include "rn2xx3.h"
 
 #define LORA_UNCONFIMED				false
 #define LORA_CONFIRMED				true
@@ -32,11 +33,28 @@
 #define LORA_KEY_LENGTH				32
 #define LORA_DEVICE_ADDRESS_LENGTH	8
 
+#define RN2483_RESET_PIN            5 
+#define RN2483_TX_PIN            	0 // RX of SAMD
+#define RN2483_RX_PIN            	1 // TX of SAMD
+
+#define RN2483_BAUD					57600
+#define SerialRN					Serial1
+
+#define LORA_LED					11
+
 typedef enum lora_statuses{
 	JOINED,
 	SUCCESS,
 	ERROR
 } LoRaStatus_t;
+// convert to
+//  ||
+//  \/
+typedef enum lora_states{
+	ACTIVE,
+	MODEM_SLEEPING,
+	FAIL
+} LoRaState_t;
 
 typedef enum activation_methods{
 	OTAA,
@@ -77,7 +95,25 @@ class LoRaWAN{
 
     private:
 		LoRaSettings_t settings;
-		LoRaStatus_t status;
+		LoRaState_t state;
+
+		rn2xx3 * modem;
+
+		String hexToString(uint8_t * bin, uint8_t binsz){
+			char hex_str[] = "0123456789abcdef";
+			uint8_t i;
+
+			String result = "";
+			result.reserve(binsz*2+1);
+
+			for (i = 0; i < binsz; i++){
+				result += hex_str[(bin[i] >> 4) & 0x0F];
+				result += hex_str[(bin[i]     ) & 0x0F];
+			}
+
+			result+="\0";
+			return result;
+		};
 };
 
 extern LoRaWAN lora;

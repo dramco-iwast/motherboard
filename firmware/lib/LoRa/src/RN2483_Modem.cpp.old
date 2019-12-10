@@ -22,7 +22,7 @@
  */
 
 #include "RN2483_Modem.h"
-//#include "wiring_private.h"
+#include "wiring_private.h"
 #include "DebugSerial.h"
 
 RN2483_Modem rn2483; // use rn23483 in main app;
@@ -64,9 +64,20 @@ void RN2483_Modem::init(void){ // Setup with autobaud
 }
 
 void RN2483_Modem::breakCondition(void){
-	/*digitalWrite(RN2483_RX_PIN, LOW);
-	delay(1);
-	digitalWrite(RN2483_RX_PIN, HIGH);*/
+	// change pin function from sercom (tx) pin to digital output
+	pinPeripheral(RN2483_RX_PIN, PIO_OUTPUT);
+	// generate break condition on RN2483 RX pin 
+	// pin must be low for more than 226 µs (for default data rate of 57600 bps)
+	digitalWrite(RN2483_RX_PIN, LOW);
+	delayMicroseconds(500);
+	digitalWrite(RN2483_RX_PIN, HIGH);
+	// change pin function back to sercom (tx)
+	pinPeripheral(RN2483_RX_PIN, PIO_SERCOM);
+
+	delayMicroseconds(100);
+	// needed for auto-baud detection (triggered by break condition)
+	SerialRN.write((uint8_t)0x55);
+	delayMicroseconds(400);
 }
 
 RN2483_Status_t RN2483_Modem::macReset(void){
@@ -238,39 +249,31 @@ RN2483_Status_t RN2483_Modem::setupOTAA(LoRaSettings_t settings){
 }
 
 RN2483_Status_t RN2483_Modem::setupABP(LoRaSettings_t settings){
-	//Serial.println("Setup ABP");
-	//Serial.println(" - mac reset");
 	RN2483_Status_t status = this->macReset();
 	if(status != MAC_OK){
 		return status;
 	}
 
-	//Serial.println(" - set dev addr");
 	status = this->setDeviceAddress(settings.deviceAddress);
 	if(status != MAC_OK){
 		return status;
 	}
 	
-	//Serial.println(" - set nwk ses key");
 	status = this->setNetworkSessionKey(settings.networkSessionKey);
 	if(status != MAC_OK){
 		return status;
 	}
 	
-	//Serial.println(" - set app ses key");
 	status = this->setApplicationSessionKey(settings.applicationSessionKey);
 	if(status != MAC_OK){
 		return status;
 	}
 
-	
-	//Serial.println(" - set default op");
 	status = this->setDefaultOperation(settings);
 	if(status != MAC_OK){
 		return status;
 	}
-	
-	//Serial.println(" - try join");
+
 	return this->joinABP();
 }
 
@@ -286,52 +289,117 @@ RN2483_Status_t RN2483_Modem::transmitUnconfirmed(uint8_t * data, uint8_t payloa
 }
 
 RN2483_Status_t RN2483_Modem::sleep(uint32_t durationMs){
-	if(durationMs < 100){
-		durationMs = 100;
+	uint32_t sleepMs = durationMs;
+	if(sleepMs < 100){
+		sleepMs = 100;
 	}
 
-	sprintf(this->commandBuffer, "sys sleep %l\r\n", durationMs);
+	// check if modem is busy
+	while(this->modemBusy()){
+		DEBUG.println("modem busy");
+		delay(10);
+	}
 
-	if(this->processMacCommand(false) == RN_RX_TIMEOUT){
+
+	sprintf(this->commandBuffer, "sys sleep %lu\r\n", sleepMs);
+	RN2483_Status_t status = this->processMacCommand(false);
+
+	if(status == RN_RX_TIMEOUT){
 		DEBUG.println("RN sleeping");
 		return MAC_OK;
 	}
 	else{
 		DEBUG.println("RN sleep error");
+		DEBUG.print("status: ");
+		DEBUG.println(status);
 		return MAC_ERR;
 	}
 }
 
-
-// send a command to the modem and process the response
-RN2483_Status_t RN2483_Modem::processMacCommand(bool secondResponse){
-	uint8_t timeout = 255;
+RN2483_Status_t RN2483_Modem::wake(void){
 	this->bytesReceived = 0;
 	memset(this->receiveBuffer, '\0', RN2483_RECEIVE_BUFFER_SIZE);
+	uint8_t timeout = 255;
 
-	// send command
-	SerialRN.print(this->commandBuffer);
-	//Serial.println("command sent");
-	//Serial.println(this->commandBuffer);
-
-	delay(100);
+	this->breakCondition();
 
 	// read response
 	while(timeout--){
-		// read chars and put them in a buffer
 		while(SerialRN.available()){
 			char c = SerialRN.read();
+			timeout = 255;
 			if(this->bytesReceived<RN2483_RECEIVE_BUFFER_SIZE){
 				this->receiveBuffer[this->bytesReceived++] = c;
 			}
 		}
 
 		if(strstr(this->receiveBuffer, "ok") != NULL){
-			//Serial.println("ok");
+			return MAC_OK;
+		}
+	}
 
-			//Serial.print("buffer: ");
-			//Serial.println(this->receiveBuffer);
+	return RN_RX_TIMEOUT;
+}
 
+bool RN2483_Modem::modemBusy(void){
+	this->bytesReceived = 0;
+	memset(this->receiveBuffer, '\0', RN2483_RECEIVE_BUFFER_SIZE);
+	uint8_t timeout = 255;
+
+	// get status
+	sprintf(this->commandBuffer, "mac get status\r\n");
+	SerialRN.print(this->commandBuffer);
+	SerialRN.flush();
+
+	// read response
+	while(timeout--){
+		while(SerialRN.available()){
+			char c = SerialRN.read();
+			timeout = 255; // reset timeout
+			if(this->bytesReceived<RN2483_RECEIVE_BUFFER_SIZE){
+				this->receiveBuffer[this->bytesReceived++] = c;
+			}
+		}
+
+		// we got the response
+		if(strlen(this->receiveBuffer) > 9){
+			return ((this->receiveBuffer[7] & 0x0F) != 0x00);
+		}
+
+		delay(100);
+	}
+
+	/*DEBUG.print("buffer: ");
+	DEBUG.println(this->receiveBuffer);
+	DEBUG.print("len: ");
+	DEBUG.println(strlen(this->receiveBuffer));*/
+	DEBUG.println("timeout in busy");
+
+	return true;
+}
+
+
+// send a command to the modem and process the response
+RN2483_Status_t RN2483_Modem::processMacCommand(bool secondResponse){
+	this->bytesReceived = 0;
+	memset(this->receiveBuffer, '\0', RN2483_RECEIVE_BUFFER_SIZE);
+	uint8_t timeout = 255;
+
+	// send command
+	SerialRN.print(this->commandBuffer);
+	SerialRN.flush();
+
+	// read response
+	while(timeout--){
+		while(SerialRN.available()){
+			char c = SerialRN.read();
+			timeout = 255;
+			if(this->bytesReceived<RN2483_RECEIVE_BUFFER_SIZE){
+				this->receiveBuffer[this->bytesReceived++] = c;
+			}
+		}
+			
+		if(strstr(this->receiveBuffer, "ok") != NULL){
 			if(secondResponse){
 				// analyze response
 				if(strstr(receiveBuffer, "accepted")){
@@ -352,16 +420,15 @@ RN2483_Status_t RN2483_Modem::processMacCommand(bool secondResponse){
 				} else if(strstr(receiveBuffer, "radio_err")){
 					return RADIO_ERR;
 				}
-				return UNKOWN_ERR;
+				//extra delay is required to receive extra response
+				delay(10);
+
 			}
 			else {
 				return MAC_OK;
 			}
 		}
 		else{
-			//Serial.println("foutje");
-			//Serial.print("buffer: ");
-			//Serial.println(this->receiveBuffer);
 			if(strstr(this->receiveBuffer, "invalid_param")){
 				return INVALID_PARAM;
 			} else if(strstr(this->receiveBuffer, "not_joined")){
@@ -379,12 +446,16 @@ RN2483_Status_t RN2483_Modem::processMacCommand(bool secondResponse){
 			} else if(strstr(this->receiveBuffer, "invalid_data_len")){
 				return INVALID_DATA_LEN;
 			}
-
-			return DATA_RETURNED; // unknow error?
 		}
+
+		delayMicroseconds(10);
 	}
 
-	//Serial.println("timeout");
+	if(strlen(this->receiveBuffer)){
+		DEBUG.println(this->receiveBuffer);
+		return DATA_RETURNED;
+	}
+
 	return RN_RX_TIMEOUT;
 }
 

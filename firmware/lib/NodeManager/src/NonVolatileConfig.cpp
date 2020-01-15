@@ -52,17 +52,17 @@ uint8_t NonVolatileConfig::getNrSensors(void){
     return this->nrSensors;
 }
 
-bool NonVolatileConfig::sensorInConfig(uint8_t id, uint8_t type){
+bool NonVolatileConfig::sensorInConfig(uint8_t ind, uint8_t type){
     DEBUG.print("Looking up: ");
-    DEBUG.print(id);
+    DEBUG.print(ind);
     DEBUG.print(" - 0x");
     DEBUG.println(type, HEX);
 
-    if(id<this->nrSensors){
-        DEBUG.print("id in config, type = 0x");
-        DEBUG.println(this->sensorConfigSettings[id].type, HEX);
+    if(ind<this->nrSensors){
+        DEBUG.print("ind in config, type = 0x");
+        DEBUG.println(this->sensorConfigSettings[ind].type, HEX);
 
-        if(this->sensorConfigSettings[id].type == type){
+        if(this->sensorConfigSettings[ind].type == type){
             DEBUG.println("MATCH");
             return true;
         }
@@ -134,33 +134,42 @@ bool NonVolatileConfig::createNewConfig(uint8_t nrSensors, Sensor * list){
     return true;
 }
 
-// get type of sensor in config (return false if sensor id is not valid)
-bool NonVolatileConfig::getSensorType(uint8_t id, uint8_t * type){
-    if(id < this->nrSensors){
-        *type = this->sensorConfigSettings[id].type;
+// get type of sensor in config (return false if sensor ind is not valid)
+bool NonVolatileConfig::getSensorType(uint8_t ind, uint8_t * type){
+    if(ind < this->nrSensors){
+        *type = this->sensorConfigSettings[ind].type;
         return true;
     }
     return false;
 }
 
-// get poll interval for metric 'metric' of sensor with id 'id'
-bool NonVolatileConfig::getSensorPollInterval(uint8_t id, uint8_t metric, uint16_t * poll){
-    if(id < this->nrSensors){
-        if(metric < this->sensorConfigSettings[id].nrMetrics){
-            *poll = this->sensorConfigSettings[id].settings[metric].pollInterval;
+// get i2caddress of sensor in config (return false if sensor ind is not valid)
+bool NonVolatileConfig::getSensorI2CAddress(uint8_t ind, uint8_t * i2cAddress){
+    if(ind < this->nrSensors){
+        *i2cAddress = this->sensorConfigSettings[ind].i2cAddress;
+        return true;
+    }
+    return false;
+}
+
+// get poll interval for metric 'metric' of sensor with ind 'ind'
+bool NonVolatileConfig::getSensorPollInterval(uint8_t ind, uint8_t metric, uint16_t * poll){
+    if(ind < this->nrSensors){
+        if(metric < this->sensorConfigSettings[ind].nrMetrics){
+            *poll = this->sensorConfigSettings[ind].settings[metric].pollInterval;
             return true;
         }
     }
     return false;
 }
 
-// get poll interval for metric 'metric' of sensor with id 'id'
-bool NonVolatileConfig::getSensorThresholdSettings(uint8_t id, uint8_t metric, uint8_t *enabled, uint16_t * tll, uint16_t *tlh){
-    if(id < this->nrSensors){
-        if(metric < this->sensorConfigSettings[id].nrMetrics){
-            *enabled = this->sensorConfigSettings[id].settings[metric].thresholdEnabled;
-            *tll = this->sensorConfigSettings[id].settings[metric].thresholdLow;
-            *tlh = this->sensorConfigSettings[id].settings[metric].thresholdHigh;
+// get poll interval for metric 'metric' of sensor with ind 'ind'
+bool NonVolatileConfig::getSensorThresholdSettings(uint8_t ind, uint8_t metric, uint8_t *enabled, uint16_t * tll, uint16_t *tlh){
+    if(ind < this->nrSensors){
+        if(metric < this->sensorConfigSettings[ind].nrMetrics){
+            *enabled = this->sensorConfigSettings[ind].settings[metric].thresholdEnabled;
+            *tll = this->sensorConfigSettings[ind].settings[metric].thresholdLow;
+            *tlh = this->sensorConfigSettings[ind].settings[metric].thresholdHigh;
             return true;
         }
     }
@@ -325,7 +334,7 @@ int NonVolatileConfig::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_
 
     uint8_t msb, lsb;
 
-    // check id is in range
+    // check ind is in range
     if(!(sensorId < this->nrSensors)){
         return -1;
     }
@@ -360,7 +369,7 @@ int NonVolatileConfig::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_
 
     uint8_t msb, lsb;
 
-    // check id is in range
+    // check ind is in range
     if(!(sensorId < this->nrSensors)){
         return -1;
     }

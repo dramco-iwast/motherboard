@@ -32,7 +32,7 @@
 #define MAX_NR_OF_SENSORS               6
 
 // Address range that is used to scan for sensors 
-#define SENSOR_IIC_BASE_ADDRESS         0x60
+#define SENSOR_IIC_BASE_ADDRESS         0x40
 #define SENSOR_IIC_END_ADDRESS          0x6F
 
 
@@ -328,7 +328,11 @@ void NodeManager::loop(void){
     DEBUG.flush();
 
     // Enter standby mode
+#ifdef SERIAL_DEBUG_OUTPUT
+    LowPower.sleep(800);
+#else
     LowPower.sleep(1000);
+#endif
 
     // if we get here, either sensor pin interrupt or rtc interrupt has taken place
     if(rtcWakeUp){
@@ -389,11 +393,12 @@ void NodeManager::getSensorData(void){
             sensorHasData[cbIndex] = false;
             uint8_t tempData[20];
             uint8_t len = 0;
+
             this->sensorList[i].readMeasurementData(tempData, &len);
 
             if((payloadBufferFill+len)<PAYLOAD_BUFFER_SIZE){
                 // copy data to payload buffer
-                payloadBuffer[payloadBufferFill++] = i+1;
+                payloadBuffer[payloadBufferFill++] = this->sensorList[i].getIicAddress();
 
                 //DEBUG.print("Sensor ");
                 //DEBUG.print(i);
@@ -462,8 +467,10 @@ void NodeManager::processAtCommands(void){
                         SerialAT.print(" ");
                     }
                     uint8_t type = 0;
+                    uint8_t id = 0;
                     this->nvConfig->getSensorType(i, &type);
-                    sprintf(atOut, "%02X%02X", (uint8_t)(i+1), type);
+                    this->nvConfig->getSensorI2CAddress(i, &id);
+                    sprintf(atOut, "%02X%02X", id, type);
                     SerialAT.print(atOut);
                 }
                 SerialAT.println();
@@ -473,12 +480,18 @@ void NodeManager::processAtCommands(void){
             // Get sensor poll interval 
             if(strstr(specific, "POL?")){
                 char * argStr = specific + 4;
-                uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
-                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
+                uint8_t id = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
 
+                // look-up index of sensor with id in the nvConfig list
+                // if the address (id) is not found, lookupIdIndex will return 0 (which results in ind = 255 > NR_SENSORS, this is ok)
+                uint8_t ind = this->nvConfig->lookupIdIndex(id) - 1;
+                DEBUG.print("index: ");
+                DEBUG.println(ind);
+                
                 uint16_t pollInterval = 0;
                 // get poll interval for (id, metric)
-                if(this->nvConfig->getSensorPollInterval(id, metric, &pollInterval)){ // false if either metric or id are invalid/incorrect
+                if(this->nvConfig->getSensorPollInterval(ind, metric, &pollInterval)){ // false if either metric or id are invalid/incorrect
                     SerialAT.print("+POL: ");
                     SerialAT.println(pollInterval);
                     commandProcessed = true;
@@ -491,13 +504,19 @@ void NodeManager::processAtCommands(void){
             // Set sensor poll interval 
             if(strstr(specific, "POL=")){
                 char * argStr = specific + 4;
-                uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
-                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
+                uint8_t id = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
+
+                // look-up index of sensor with id in the nvConfig list
+                // if the address (id) is not found, lookupIdIndex will return 0 (which results in ind = 255 > NR_SENSORS, this is ok)
+                uint8_t ind = this->nvConfig->lookupIdIndex(id) - 1;
+                DEBUG.print("index: ");
+                DEBUG.println(ind);
 
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t pol = strtol(nextNr, NULL, 10);
 
-                if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfPollInterval, pol)){
+                if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfPollInterval, pol)){
                     if(!(pol % 60)){
                         SerialAT.println("OK");
                         commandProcessed = true;
@@ -514,14 +533,20 @@ void NodeManager::processAtCommands(void){
             // Get sensor threshold settings
             if(strstr(specific, "TH?")){
                 char * argStr = specific + 3;
-                uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
-                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
+                uint8_t id = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
+
+                // look-up index of sensor with id in the nvConfig list
+                // if the address (id) is not found, lookupIdIndex will return 0 (which results in ind = 255 > NR_SENSORS, this is ok)
+                uint8_t ind = this->nvConfig->lookupIdIndex(id) - 1;
+                DEBUG.print("index: ");
+                DEBUG.println(ind);
 
                 uint8_t enabled = 0;
                 uint16_t tLevLow = 0;
                 uint16_t tLevHigh = 0;
                 // get threshold settings for (id, metric)
-                if(this->nvConfig->getSensorThresholdSettings(id, metric, &enabled, &tLevLow, &tLevHigh)){
+                if(this->nvConfig->getSensorThresholdSettings(ind, metric, &enabled, &tLevLow, &tLevHigh)){
                     SerialAT.print("+TH: ");
                     SerialAT.print(enabled);
                     SerialAT.print(" ");
@@ -538,14 +563,20 @@ void NodeManager::processAtCommands(void){
             // Set sensor threshold enabled 
             if(strstr(specific, "TE=")){
                 char * argStr = specific + 3;
-                uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
-                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
+                uint8_t id = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
 
                 char * nextNr = strchr(argStr+3, ' ');
                 uint8_t enabled = strtol(nextNr, NULL, 10);
 
+                // look-up index of sensor with id in the nvConfig list
+                // if the address (id) is not found, lookupIdIndex will return 0 (which results in ind = 255 > NR_SENSORS, this is ok)
+                uint8_t ind = this->nvConfig->lookupIdIndex(id) - 1;
+                DEBUG.print("index: ");
+                DEBUG.println(ind);
+
                 if((enabled == 0) || (enabled == 1)){
-                    if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdEnabled, enabled)){
+                    if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfThresholdEnabled, enabled)){
                         SerialAT.println("OK");
                         commandProcessed = true;
                     }
@@ -562,13 +593,19 @@ void NodeManager::processAtCommands(void){
             // Set sensor threshold enabled 
             if(strstr(specific, "TLL=")){
                 char * argStr = specific + 4;
-                uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
-                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
+                uint8_t id = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
 
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t tll = strtol(nextNr, NULL, 10);
 
-                if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdLow, tll)){
+                // look-up index of sensor with id in the nvConfig list
+                // if the address (id) is not found, lookupIdIndex will return 0 (which results in ind = 255 > NR_SENSORS, this is ok)
+                uint8_t ind = this->nvConfig->lookupIdIndex(id) - 1;
+                DEBUG.print("index: ");
+                DEBUG.println(ind);
+
+                if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfThresholdLow, tll)){
                     SerialAT.println("OK");
                     commandProcessed = true;
                 }
@@ -580,13 +617,19 @@ void NodeManager::processAtCommands(void){
             // Set sensor low threshold level 
             if(strstr(specific, "TLH=")){
                 char * argStr = specific + 4;
-                uint8_t id = strtol(argStr, NULL, 16) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
-                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // same principle here
+                uint8_t id = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t metric = strtol(argStr+3, NULL, 10) - 1; // argStr 00 will translate to 256 which is > MAX_NR_SENSORS (but no problem)
 
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t tlh = strtol(nextNr, NULL, 10);
 
-                if(this->nvConfig->storeSensorConfigField(id, metric, sensorConfThresholdHigh, tlh)){
+                // look-up index of sensor with id in the nvConfig list
+                // if the address (id) is not found, lookupIdIndex will return 0 (which results in ind = 255 > NR_SENSORS, this is ok)
+                uint8_t ind = this->nvConfig->lookupIdIndex(id) - 1;
+                DEBUG.print("index: ");
+                DEBUG.println(ind);
+
+                if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfThresholdHigh, tlh)){
                     SerialAT.println("OK");
                     commandProcessed = true;
                 }
@@ -651,6 +694,17 @@ void NodeManager::configureSensors(void){
             uint16_t poll;
             this->nvConfig->getSensorPollInterval(i, j, &poll);
             this->sensorList[i].setPollInterval(j, poll);
+            DEBUG.print("metric ");
+            DEBUG.print(j);
+            DEBUG.print(" - ");
+            DEBUG.print(poll);
+            DEBUG.print(" - ");
+            DEBUG.print(enabled);
+            DEBUG.print(" - ");
+            DEBUG.print(tll);
+            DEBUG.print(" - ");
+            DEBUG.println(tlh);
+            delay(10);
         }
     }
 }

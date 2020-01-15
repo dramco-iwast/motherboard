@@ -211,6 +211,7 @@ void Sensor::setPollInterval(uint8_t metric, uint16_t poll){
  * TODO: metric filtering
  */
 void Sensor::updateTime(){
+  bool measure = false;
   for(uint8_t i=0; i<this->nrMetrics; i++){
     DEBUG.print(" - metric ");
     DEBUG.print(i);
@@ -219,7 +220,7 @@ void Sensor::updateTime(){
       this->pollTimer[i]--;
       if(this->pollTimer[i] == 0){
         this->pollTimer[i] = this->pollInterval[i];
-        this->startMeasurement(); // TODO: specify metric
+        measure = true;
         // start measurement results in pin interrupt
         DEBUG.print("measure ");
         DEBUG.print(this->mLen);
@@ -232,6 +233,9 @@ void Sensor::updateTime(){
     else{
       DEBUG.println("no polling");
     }
+  }
+  if(measure){
+    this->startMeasurement();
   }
   DEBUG.println();
 }

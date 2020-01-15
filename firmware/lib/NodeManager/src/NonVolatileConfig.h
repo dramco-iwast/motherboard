@@ -66,20 +66,32 @@ public:
     // get number of sensors in the configuration
     uint8_t getNrSensors(void);
 
-    // check if sensor with specified id and type exists in the configuration
-    bool sensorInConfig(uint8_t id, uint8_t type);
+    uint8_t lookupIdIndex(uint8_t id){
+        uint8_t i = 0;
+        while(i < this->nrSensors){
+            if(this->sensorConfigSettings[i++].i2cAddress == id){
+                return i;
+            }
+        }
+        return 0;
+    };
+
+    // check if sensor with specified ind and type exists in the configuration
+    bool sensorInConfig(uint8_t ind, uint8_t type);
     
     // discard current configuration
     void discardConfig(void);
     // create a new configuration based on a list of sensors
     bool createNewConfig(uint8_t nrSensors, Sensor * list);
 
-    // get type of sensor with id 'id'
-    bool getSensorType(uint8_t id, uint8_t * type);
-    // get poll interval for metric 'metric' of sensor with id 'id'
-    bool getSensorPollInterval(uint8_t id, uint8_t metric, uint16_t * poll);
-    // get threshold settings for metric 'metric' of sensor with id 'id'
-    bool getSensorThresholdSettings(uint8_t id, uint8_t metric, uint8_t *enabled, uint16_t * tll, uint16_t *tlh);
+    // get type of sensor with ind 'ind'
+    bool getSensorType(uint8_t ind, uint8_t * type);
+    // get i2caddress of sensor in config (return false if sensor ind is not valid)
+    bool getSensorI2CAddress(uint8_t ind, uint8_t * i2cAddress);
+    // get poll interval for metric 'metric' of sensor with ind 'ind'
+    bool getSensorPollInterval(uint8_t ind, uint8_t metric, uint16_t * poll);
+    // get threshold settings for metric 'metric' of sensor with ind 'ind'
+    bool getSensorThresholdSettings(uint8_t ind, uint8_t metric, uint8_t *enabled, uint16_t * tll, uint16_t *tlh);
 
     // store a single configuration field (1 byte)
     bool storeSensorConfigField(uint8_t sensorId, uint8_t metric, SensorConfigField_t field, uint8_t value);
@@ -103,9 +115,7 @@ private:
 
     int getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field, uint8_t metric);
     int getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field);
-
     
-
     uint8_t nrSensors;
     SensorConfig_t * sensorConfigSettings;
 };

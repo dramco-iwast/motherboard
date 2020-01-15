@@ -41,6 +41,8 @@ void loop() {
 
 #ifdef LORA_AGGREGATE_THRESHOLD
   if(pSize > LORA_AGGREGATE_THRESHOLD){
+#else
+  if(pSize > 0){
 #endif
     DEBUG.println("\nMAIN APP: Data available!");
     if(nm.getLoraPayload(buf, LORA_MAX_PAYLOAD_SIZE)){
@@ -53,15 +55,13 @@ void loop() {
       }
       DEBUG.println("\n");
 
-      lora.wake();
-      lora.sendData(buf, pSize);
-      lora.sleep();
+      //lora.wake();
+      //lora.sendData(buf, pSize);
+      //lora.sleep();
     }
     else{
       DEBUG.println("Empty payload.\n");
     }
-#ifdef LORA_AGGREGATE_THRESHOLD
   }
-#endif
 
 }

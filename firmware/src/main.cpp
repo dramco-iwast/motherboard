@@ -55,9 +55,9 @@ void loop() {
       }
       DEBUG.println("\n");
 
-      //lora.wake();
-      //lora.sendData(buf, pSize);
-      //lora.sleep();
+      lora.wake();
+      lora.sendData(buf, pSize);
+      lora.sleep();
     }
     else{
       DEBUG.println("Empty payload.\n");

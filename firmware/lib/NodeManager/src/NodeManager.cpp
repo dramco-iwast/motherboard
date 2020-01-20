@@ -121,7 +121,7 @@ SensorCb sensorCallbacks[MAX_NR_OF_SENSORS] = {
     intPin2Callback,
     intPin3Callback,
     intPin4Callback,
-    intPin4Callback
+    intPin5Callback
 };
 
 // for debugging purposes

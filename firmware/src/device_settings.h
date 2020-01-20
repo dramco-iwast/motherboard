@@ -26,7 +26,7 @@
 
 #define MOTHERBOARD_ID				0x474F
 #define LORA_MAX_PAYLOAD_SIZE		48
-#define LORA_AGGREGATE_THRESHOLD	20
+//#define LORA_AGGREGATE_THRESHOLD	20
 
 /* LoRaWAN section ***********************************************************************/
 
@@ -68,11 +68,11 @@
 #elif OVER_THE_AIR_ACTIVATION == 0
 // Copy your settings here
 /* 32-bit device address */
-#define LORAWAN_DEVICE_ADDRESS     	"26011617"
+#define LORAWAN_DEVICE_ADDRESS     	"YOUR_DEVICE_ADDRESS_"
 /* 128-bit AES key */
-#define LORAWAN_NWKSKEY             "33B9E008DB380CE83A5E38FAF5405F51"
+#define LORAWAN_NWKSKEY             "YOUR_SECRET_AES_NTW_SESSION_KEY_"
 /* 128-bit AES key */
-#define LORAWAN_APPSKEY             "01B026916BD0029A217D6B894AB85139"
+#define LORAWAN_APPSKEY             "YOUR_SECRET_AES_APP_SESSION_KEY_"
 // Don't change
 #define JOIN_MECHANISM				ABP
 #else

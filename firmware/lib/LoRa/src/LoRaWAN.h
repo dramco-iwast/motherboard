@@ -42,20 +42,6 @@
 
 #define LORA_LED					11
 
-typedef enum lora_statuses{
-	JOINED,
-	SUCCESS,
-	ERROR
-} LoRaStatus_t;
-// convert to
-//  ||
-//  \/
-typedef enum lora_states{
-	ACTIVE,
-	MODEM_SLEEPING,
-	FAIL
-} LoRaState_t;
-
 typedef enum activation_methods{
 	OTAA,
 	ABP
@@ -86,34 +72,35 @@ class LoRaWAN{
     public:
         LoRaWAN(void);
 
+		/* Initialize LoRaWAN modem according to LoRaSettings_t s.
+		 * This will only intialize the hardware. No communication yet.
+		 */
 		void begin(LoRaSettings_t s);
+
+		/* Join a LoRaWAN network (ABP only)
+		 * LoRaWAN::begin() needs to be called first.
+		 */
 		void join(void);
+
+		/* Send "raw data" bytes (in "packet" with length "size") over the LoRaWAN network
+		 * No resends on FAIL
+		 * Only unconfirmed messages
+		 */
 		void sendData(uint8_t * packet, uint8_t size);
 
+		/* Put modem (hardware) in sleep to reduce power consumption
+		 * The duration is now 1 week, but we assume a forced wake-up within that period
+		 */
 		void sleep(void);
+
+		/* Force the modem to wake up from sleep
+		 */
 		void wake(void);
 
     private:
 		LoRaSettings_t settings;
-		LoRaState_t state;
 
 		rn2xx3 * modem;
-
-		String hexToString(uint8_t * bin, uint8_t binsz){
-			char hex_str[] = "0123456789abcdef";
-			uint8_t i;
-
-			String result = "";
-			result.reserve(binsz*2+1);
-
-			for (i = 0; i < binsz; i++){
-				result += hex_str[(bin[i] >> 4) & 0x0F];
-				result += hex_str[(bin[i]     ) & 0x0F];
-			}
-
-			result+="\0";
-			return result;
-		};
 };
 
 extern LoRaWAN lora;

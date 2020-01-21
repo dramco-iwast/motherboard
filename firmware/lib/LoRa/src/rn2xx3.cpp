@@ -29,6 +29,11 @@ _serial(serial)
   _serial.setTimeout(2000);
 }
 
+/* G.O.: modification (for autobaud operation on SAMD)
+  * A constructor taking a Stream ({Software/Hardware}Serial) object and pin numbers of
+  * the pins connected to the rn reset, rx & tx pins
+  * The serial port should already be initialised when initialising this library.
+  */
 rn2xx3::rn2xx3(Stream& serial, uint8_t rnreset, uint8_t rnrx, uint8_t rntx):
 _serial(serial)
 {
@@ -39,7 +44,7 @@ _serial(serial)
   pinMode(_rnreset, OUTPUT);
 }
 
-//TODO: change to a boolean
+//G.O.: changed to a boolean
 bool rn2xx3::autobaud()
 {
   String response = "";
@@ -59,12 +64,14 @@ bool rn2xx3::autobaud()
   return false;
 }
 
+// G.O. reset by rn reset pin
 void rn2xx3::reset(void){
   digitalWrite(_rnreset, LOW);
   delay(500);
   digitalWrite(_rnreset, HIGH);
 }
 
+// G.O.: SAMD break condition
 void rn2xx3::breakcondition(void){
 	// change pin function from sercom (tx) pin to digital output
 	pinPeripheral(_rnrx, PIO_OUTPUT);
@@ -81,7 +88,6 @@ void rn2xx3::breakcondition(void){
 	_serial.write((uint8_t)0x55);
 	delayMicroseconds(400);
 }
-
 
 String rn2xx3::sysver()
 {
@@ -663,6 +669,7 @@ void rn2xx3::sleep(long msec)
 {
   _serial.print("sys sleep ");
   _serial.println(msec);
+  _serial.flush();
 }
 
 String rn2xx3::sendRawCommand(const String& command)
@@ -964,9 +971,3 @@ bool rn2xx3::setTXoutputPower(int pwridx)
 {
   return sendMacSet(F("pwridx"), String(pwridx));
 }
-
-/*bool rn2xx3::wake(void){
-
-
-  _serial.readStringUntil('\n');
-}*/

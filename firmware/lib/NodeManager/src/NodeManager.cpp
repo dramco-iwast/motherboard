@@ -45,7 +45,6 @@ volatile bool rtcWakeUp = false;
 // rtc interrupt callback
 void rtcCallback(void){
     rtcWakeUp = true;
-    DEBUG.println("periodic wake-up");
 }
 
 // pin interrupt callbacks
@@ -335,7 +334,12 @@ void NodeManager::loop(void){
 #endif
 
     // if we get here, either sensor pin interrupt or rtc interrupt has taken place
+    if(this->dataAvailable()){
+        // get data and add to payload
+        this->getSensorData();
+    }
     if(rtcWakeUp){
+        DEBUG.println("periodic wake-up");
         // update poll timers for all sensors
         for(uint8_t i=0; i<this->nrSensors; i++){
             /*DEBUG.print("sensor ");
@@ -344,10 +348,6 @@ void NodeManager::loop(void){
         }
 
         rtcWakeUp = false;
-    }
-    if(this->dataAvailable()){
-        // get data and add to payload
-        this->getSensorData();
     }
 
 }
@@ -400,14 +400,16 @@ void NodeManager::getSensorData(void){
                 // copy data to payload buffer
                 payloadBuffer[payloadBufferFill++] = this->sensorList[i].getIicAddress();
 
-                //DEBUG.print("Sensor ");
-                //DEBUG.print(i);
-                //DEBUG.print(" data: ");
+                DEBUG.print("Sensor ");
+                DEBUG.print(i);
+                DEBUG.print(" len:" );
+                DEBUG.print(len);
+                DEBUG.print(" data: ");
                 for(uint8_t j=0; j<len; j++){
-                    /*if(tempData[j]<16){
+                    if(tempData[j]<16){
                         DEBUG.print("0");
                     }
-                    DEBUG.print(tempData[j], HEX);*/
+                    DEBUG.print(tempData[j], HEX);
 
                     payloadBuffer[payloadBufferFill++] = tempData[j];
                 }

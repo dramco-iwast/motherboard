@@ -258,6 +258,7 @@ class rn2xx3
     String getLastErrorInvalidParam();
 
     void reset(void);
+
     //bool wake(void);
 
   private:
@@ -265,8 +266,8 @@ class rn2xx3
 
     // G.O. modified:
     uint8_t _rnreset;
-    uint8_t _rnrx;
-    uint8_t _rntx;
+    uint8_t _rnrx;  // generate break condition on SAMD
+    uint8_t _rntx; // not really used, but added for completion
 
     RN2xx3_t _moduleType = RN_NA;
 
@@ -324,7 +325,6 @@ class rn2xx3
 
     int readIntValue(const String& command);
 
-
     // All "mac set ..." commands return either "ok" or "invalid_param"
     bool sendMacSet(const String& param, const String& value);
     bool sendMacSetEnabled(const String& param, bool enabled);
@@ -342,7 +342,6 @@ class rn2xx3
     bool setAdaptiveDataRate(bool enabled);
     bool setAutomaticReply(bool enabled);
     bool setTXoutputPower(int pwridx);
-
 
     void breakcondition(void);
 };

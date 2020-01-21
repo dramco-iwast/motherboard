@@ -333,13 +333,13 @@ void NodeManager::loop(void){
     LowPower.sleep(1000);
 #endif
 
-    // if we get here, either sensor pin interrupt or rtc interrupt has taken place
-    if(this->dataAvailable()){
-        // get data and add to payload
-        this->getSensorData();
-    }
     if(rtcWakeUp){
         DEBUG.println("periodic wake-up");
+        // if we get here, either sensor pin interrupt or rtc interrupt has taken place
+        if(this->dataAvailable()){
+            // get data and add to payload
+            this->getSensorData();
+        }
         // update poll timers for all sensors
         for(uint8_t i=0; i<this->nrSensors; i++){
             /*DEBUG.print("sensor ");
@@ -349,7 +349,6 @@ void NodeManager::loop(void){
 
         rtcWakeUp = false;
     }
-
 }
 
 uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){

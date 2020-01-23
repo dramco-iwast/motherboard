@@ -77,7 +77,7 @@ public:
     };
 
     // check if sensor with specified ind and type exists in the configuration
-    bool sensorInConfig(uint8_t ind, uint8_t type);
+    bool sensorInConfig(uint8_t ind, uint8_t i2c, uint8_t type);
     
     // discard current configuration
     void discardConfig(void);

@@ -261,7 +261,7 @@ void NodeManager::begin(void){
     }
     else{
         for(uint8_t i=0; i<this->nrSensors; i++){
-            if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getSensorType())){
+            if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getIicAddress(), this->sensorList[i].getSensorType())){
                 diffDetected = true;
                 break;
             }

@@ -52,7 +52,7 @@ uint8_t NonVolatileConfig::getNrSensors(void){
     return this->nrSensors;
 }
 
-bool NonVolatileConfig::sensorInConfig(uint8_t ind, uint8_t type){
+bool NonVolatileConfig::sensorInConfig(uint8_t ind, uint8_t i2c, uint8_t type){
     DEBUG.print("Looking up: ");
     DEBUG.print(ind);
     DEBUG.print(" - 0x");
@@ -62,7 +62,7 @@ bool NonVolatileConfig::sensorInConfig(uint8_t ind, uint8_t type){
         DEBUG.print("ind in config, type = 0x");
         DEBUG.println(this->sensorConfigSettings[ind].type, HEX);
 
-        if(this->sensorConfigSettings[ind].type == type){
+        if(this->sensorConfigSettings[ind].type == type && this->sensorConfigSettings[ind].i2cAddress == i2c){
             DEBUG.println("MATCH");
             return true;
         }

@@ -33,7 +33,7 @@
 
 // Address range that is used to scan for sensors 
 #define SENSOR_IIC_BASE_ADDRESS         0x40
-#define SENSOR_IIC_END_ADDRESS          0x6F
+#define SENSOR_IIC_END_ADDRESS          0x7F
 
 
 // List of interrupt pins

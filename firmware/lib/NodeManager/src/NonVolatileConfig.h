@@ -63,6 +63,10 @@ public:
     // read complete configuration from non-volatile memory
     bool readSensorConfig(void);
 
+    // set/get accumulation
+    uint8_t getDataAccumulation(void);
+    void setDataAccumulation(uint8_t yesNo);
+
     // get number of sensors in the configuration
     uint8_t getNrSensors(void);
 
@@ -117,6 +121,7 @@ private:
     int getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field);
     
     uint8_t nrSensors;
+    uint8_t dataAccumulation;
     SensorConfig_t * sensorConfigSettings;
 };
 

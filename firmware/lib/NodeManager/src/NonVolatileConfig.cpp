@@ -28,6 +28,8 @@
 
 // Non-Volatile storage offsets
 #define NR_SENSORS_OFFSET               0
+#define DATA_ACCUMULATION_OFFSET        1
+#define SENSOR_CONFIG_START_OFFSET      2
 #define SENSOR_CONFIG_I2C_OFFSET        2
 #define SENSOR_CONFIG_TYPE_OFFSET       3
 #define SENSOR_CONFIG_NRSET_OFFSET      4
@@ -42,6 +44,7 @@
 NonVolatileConfig::NonVolatileConfig(void){
     this->sensorConfigSettings = NULL;
     this->nrSensors = 0;
+    this->dataAccumulation = 0;
 }
 
 NonVolatileConfig::~NonVolatileConfig(){
@@ -50,6 +53,14 @@ NonVolatileConfig::~NonVolatileConfig(){
 
 uint8_t NonVolatileConfig::getNrSensors(void){
     return this->nrSensors;
+}
+
+uint8_t NonVolatileConfig::getDataAccumulation(void){
+    return this->dataAccumulation;
+}
+
+void NonVolatileConfig::setDataAccumulation(uint8_t yesNo){
+    this->dataAccumulation = yesNo;
 }
 
 bool NonVolatileConfig::sensorInConfig(uint8_t ind, uint8_t i2c, uint8_t type){
@@ -220,8 +231,9 @@ bool NonVolatileConfig::storeSensorConfigField(uint8_t sensorId, uint8_t metric,
 // store complete sensor configuration / will overwrite existing configs
 void NonVolatileConfig::storeSensorConfig(void){
     EEPROM.write(NR_SENSORS_OFFSET, nrSensors);
+    EEPROM.write(DATA_ACCUMULATION_OFFSET, dataAccumulation);
 
-    int offset = 1;
+    int offset = SENSOR_CONFIG_START_OFFSET;
     int bytesStored = 0;
     for(uint8_t i=0; i<this->nrSensors; i++){
         storeSensorConfig(offset, this->sensorConfigSettings[i], &bytesStored);
@@ -233,6 +245,13 @@ void NonVolatileConfig::storeSensorConfig(void){
 }
 
 void NonVolatileConfig::printSensorConfig(void){
+    DEBUG.print("Data accumulation: ");
+    if(this->dataAccumulation){
+        DEBUG.println("yes.");
+    }
+    else{
+        DEBUG.println("no.");
+    }
     DEBUG.print("Nr sensors: ");
     DEBUG.println(this->nrSensors);
 
@@ -329,7 +348,7 @@ void NonVolatileConfig::storeSensorConfigField(int offset, uint16_t value){
 }
 
 int NonVolatileConfig::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field){
-    int baseOffset = 1;
+    int baseOffset = SENSOR_CONFIG_START_OFFSET;
     int fieldOffset;
 
     uint8_t msb, lsb;
@@ -415,6 +434,7 @@ bool NonVolatileConfig::readSensorConfig(void){
     }
 
     this->nrSensors = EEPROM.read(NR_SENSORS_OFFSET);
+    this->dataAccumulation = EEPROM.read(DATA_ACCUMULATION_OFFSET);
 
     this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
     if(this->sensorConfigSettings == NULL){

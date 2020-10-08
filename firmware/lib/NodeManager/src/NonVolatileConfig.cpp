@@ -13,7 +13,7 @@
  *         File: NonVolatileConfig.cpp
  *      Created: 2019-10-25
  *       Author: Geoffrey Ottoy
- *      Version: 0.1
+ *      Version: 1.2
  *
  *  Description: IWAST node manager
  *      needs more info

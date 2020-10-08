@@ -13,7 +13,7 @@
  *         File: NodeManager.h
  *      Created: 2019-10-16
  *       Author: Geoffrey Ottoy
- *      Version: 0.1
+ *      Version: 1.1
  *
  *  Description: IWAST node manager
  *      needs more info

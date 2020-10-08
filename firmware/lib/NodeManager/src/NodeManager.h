@@ -91,10 +91,9 @@ private:
 
     uint8_t payloadBuffer[PAYLOAD_BUFFER_SIZE];
     uint8_t payloadBufferFill;
-    //bool payloadAvailable;
 
-    //RTCZero * rtc;
-    int aliveCounter = 0;
+    int sleepRemaining = 0;
+    int lastRtcWakeup;
 };
 
 

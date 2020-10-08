@@ -155,3 +155,11 @@ void LoRaWAN::wake(){
     SerialRN.flush();
     DEBUG.println("success");
 }
+
+void LoRaWAN::ledOn(void){
+    digitalWrite(LORA_LED, LOW);
+}
+
+void LoRaWAN::ledOff(void){
+    digitalWrite(LORA_LED, HIGH);
+}

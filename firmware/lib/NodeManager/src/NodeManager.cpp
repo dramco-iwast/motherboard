@@ -134,8 +134,8 @@ void DUMP_EEPROM(int size){
     }
 }
 
+// constructor
 NodeManager::NodeManager(uint16_t id){
-
     this->id = id;
     sprintf(this->idStr, "%04X", id);
 
@@ -147,8 +147,13 @@ NodeManager::NodeManager(uint16_t id){
     this->conFigMode = true;
 
     this->payloadBufferFill = 0;
+    
+    this->sleepRemaining = 60000;
+    this->lastRtcWakeup = 0;
 
     this->nvConfig = new NonVolatileConfig();
+    
+    LowPower.setRtcTime(0);
 }
 
 void NodeManager::begin(void){
@@ -290,6 +295,11 @@ void NodeManager::begin(void){
     DEBUG.println("Done\n");
 }
 
+/* Run configuration interface over USB-serial
+ * Setting forever to 'true' will keep it in config mode forever. This is only for testing purposes.
+ * The default behaviour is to exit config mode when there is no serial communication within 
+ * CONFIG_DURATION_MS. If there is, however, config mode can be exited by sending the "AT+CLS" command.
+ */
 void NodeManager::runConfigMode(bool forever){
     while(this->conFigMode || forever){
         // disable at commands after 10000
@@ -299,9 +309,12 @@ void NodeManager::runConfigMode(bool forever){
             }
         }
 
+        // Run the configuration interface
         this->processAtCommands();
     }
 
+    // We have exited configuration mode
+    // Next step is to store config settings, clean up and start normal operation.
     // Detach USB interface
     SerialAT.end();
     delay(1000);
@@ -316,30 +329,19 @@ void NodeManager::runConfigMode(bool forever){
 
     DEBUG.println("Attach RTC callback.");
     LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
+    this->lastRtcWakeup = LowPower.getRtcTime();
 
     DEBUG.println("Exit config mode.");
     delay(10);
 }
 
 void NodeManager::loop(void){
-    // sleep until wake-up event occurs
-    DEBUG.println(F("going to sleep"));
-    DEBUG.flush();
-
-    // Enter standby mode
-#ifdef SERIAL_DEBUG_OUTPUT
-    LowPower.sleep(800);
-#else
-    LowPower.sleep(1000);
-#endif
-
+    // stuff to do on rtc wake-up
     if(rtcWakeUp){
+        this->lastRtcWakeup = LowPower.getRtcTime();
+        DEBUG.print(F("epoch: "));
+        DEBUG.println(this->lastRtcWakeup);
         DEBUG.println("periodic wake-up");
-        // if we get here, either sensor pin interrupt or rtc interrupt has taken place
-        if(this->dataAvailable()){
-            // get data and add to payload
-            this->getSensorData();
-        }
         // update poll timers for all sensors
         for(uint8_t i=0; i<this->nrSensors; i++){
             /*DEBUG.print("sensor ");
@@ -348,6 +350,33 @@ void NodeManager::loop(void){
         }
 
         rtcWakeUp = false;
+    }
+    
+    // if we get here, either sensor pin interrupt or rtc interrupt has taken place
+    if(this->dataAvailable()){
+        // get data and add to payload
+        this->getSensorData();
+    }
+
+    // update sleep-time remaining
+    // if we got woken up by an sensor interrupt before the sleep time expires we need to keep sleeping
+    int timeSinceLastRtcWakeup = (int)(LowPower.getRtcTime() - this->lastRtcWakeup);
+    if(timeSinceLastRtcWakeup > 60){
+        timeSinceLastRtcWakeup = 0;
+    }
+    DEBUG.print(F("Tdiff: "));
+    DEBUG.println(timeSinceLastRtcWakeup);
+    this->sleepRemaining = 60 - timeSinceLastRtcWakeup;
+
+    if((this->sleepRemaining > 0) ){
+        // sleep until wake-up event occurs
+        DEBUG.print(F("going to sleep for: "));
+        DEBUG.print(this->sleepRemaining);
+        DEBUG.println(F(" s."));
+        DEBUG.flush();
+
+        // Enter standby mode
+        LowPower.sleep(this->sleepRemaining*1000);
     }
 }
 
@@ -412,7 +441,9 @@ void NodeManager::getSensorData(void){
 
                     payloadBuffer[payloadBufferFill++] = tempData[j];
                 }
-                //DEBUG.println();
+                DEBUG.println();
+                DEBUG.print("timestamp: ");
+                DEBUG.println(LowPower.getRtcTime());
             }
             else{
                 DEBUG.println(F("Payload buffer is full!"));
@@ -494,7 +525,7 @@ void NodeManager::processAtCommands(void){
                 // get poll interval for (id, metric)
                 if(this->nvConfig->getSensorPollInterval(ind, metric, &pollInterval)){ // false if either metric or id are invalid/incorrect
                     SerialAT.print("+POL: ");
-                    SerialAT.println(pollInterval);
+                    SerialAT.println(pollInterval*60);
                     commandProcessed = true;
                 }
                 else{
@@ -517,18 +548,20 @@ void NodeManager::processAtCommands(void){
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t pol = strtol(nextNr, NULL, 10);
 
-                if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfPollInterval, pol)){
-                    if(!(pol % 60)){
+                if(!(pol % 60)){
+                    uint16_t polMinutes = (uint16_t)(pol / 60);
+                    if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfPollInterval, polMinutes)){
                         SerialAT.println("OK");
                         commandProcessed = true;
                     }
                     else{
-                        errorCode = AT_INVALID_POL;
+                        errorCode = AT_INVALID_ID;
                     }
                 }
                 else{
-                    errorCode = AT_INVALID_ID;
+                    errorCode = AT_INVALID_POL;
                 }
+            
             }
 
             // Get sensor threshold settings
@@ -639,23 +672,51 @@ void NodeManager::processAtCommands(void){
                 }
             }
 
-            // Set sensor low threshold level 
-            if(strstr(specific, "TEST1")){ // AT+TEST1
-                SerialAT.println("OK");
+            // Set sensor data accumulation 
+            if(strstr(specific, "ACC=")){
+                char * argStr = specific + 4;
+                uint8_t yesNo = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
 
-                // you can put code for testing here
-                this->configureSensors();
+                this->nvConfig->setDataAccumulation(yesNo);
+                SerialAT.println("OK");
                 commandProcessed = true;
             }
 
-            // Set sensor low threshold level 
-            if(strstr(specific, "TEST2")){ // AT+TEST2
-                SerialAT.println("OK");
+            // Get sensor data accumulation 
+            if(strstr(specific, "ACC?")){
+                SerialAT.print("+ACC: ");
+                SerialAT.println(this->nvConfig->getDataAccumulation());
 
-                // you can put code for testing here
-               //this->sensorList[0].readMeasurementData();
+                SerialAT.println("OK");
                 commandProcessed = true;
             }
+
+            /*// Set sensor low threshold level 
+            if(strstr(specific, "TIME=")){ // AT+TIME=<epoch>
+                char * argStr = specific + 5;
+                uint32_t epoch = strtol(argStr, NULL, 10);
+
+                SerialAT.print("epoch:" );
+                SerialAT.println(epoch);
+
+                if(epoch != 0){
+                    LowPower.setRtcTime(epoch);
+                    SerialAT.println("OK");
+                    commandProcessed = true;
+                }
+                else{
+                    errorCode = AT_WRONG_VALUE;
+                }
+            }
+
+            // Set sensor low threshold level 
+            if(strstr(specific, "TIME?")){ // AT+TIME?
+                SerialAT.print("epoch:" );
+                SerialAT.println(LowPower.getRtcTime());
+                SerialAT.println("OK");
+
+                commandProcessed = true;
+            }*/
 
         }
         else{

@@ -97,6 +97,9 @@ class LoRaWAN{
 		 */
 		void wake(void);
 
+		void ledOn(void);
+		void ledOff(void);
+
     private:
 		LoRaSettings_t settings;
 

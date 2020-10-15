@@ -29,7 +29,7 @@
 #include "NonVolatileConfig.h"
 #include "Sensor.h"
 
-#define CONFIG_DURATION_MS  30000
+#define CONFIG_DURATION_MS  5000
 
 #define AT_COMMAND_MAX_SIZE 32
 #define PAYLOAD_BUFFER_SIZE 64
@@ -61,8 +61,10 @@ public:
 
     // main operation
     void loop(void);
+    void sleep(void);
     uint8_t payloadAvailable(void); // return payload size
     uint8_t getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize);
+    bool dataAccumulationEnabled(void);
 
 private:
     void processAtCommands(void);
@@ -91,9 +93,11 @@ private:
 
     uint8_t payloadBuffer[PAYLOAD_BUFFER_SIZE];
     uint8_t payloadBufferFill;
+    bool doDataAccumulation;
 
     int sleepRemaining = 0;
     int lastRtcWakeup;
+    int statusCounter;
 };
 
 

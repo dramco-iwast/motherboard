@@ -148,8 +148,9 @@ NodeManager::NodeManager(uint16_t id){
 
     this->payloadBufferFill = 0;
     
-    this->sleepRemaining = 60000;
+    this->sleepRemaining = 0;
     this->lastRtcWakeup = 0;
+    this->statusCounter = 0;
 
     this->nvConfig = new NonVolatileConfig();
     
@@ -315,16 +316,19 @@ void NodeManager::runConfigMode(bool forever){
 
     // We have exited configuration mode
     // Next step is to store config settings, clean up and start normal operation.
-    // Detach USB interface
+    
+    DEBUG.println("Disconnecting USB ...");
     SerialAT.end();
     delay(1000);
 	USBDevice.detach();
+    USBDevice.end();
 
     DEBUG.println("Configuring connected sensors ...");
     this->configureSensors();
 
     DEBUG.println("Using configuration:");
     this->nvConfig->storeSensorConfig();
+    this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
     delete this->nvConfig;
 
     DEBUG.println("Attach RTC callback.");
@@ -344,10 +348,11 @@ void NodeManager::loop(void){
         DEBUG.println("periodic wake-up");
         // update poll timers for all sensors
         for(uint8_t i=0; i<this->nrSensors; i++){
-            /*DEBUG.print("sensor ");
-            DEBUG.println(i);*/
+            DEBUG.print("Sensor ");
+            DEBUG.println(i);
             this->sensorList[i].updateTime();
         }
+        this->statusCounter++;
 
         rtcWakeUp = false;
     }
@@ -357,7 +362,9 @@ void NodeManager::loop(void){
         // get data and add to payload
         this->getSensorData();
     }
+}
 
+void NodeManager::sleep(void){
     // update sleep-time remaining
     // if we got woken up by an sensor interrupt before the sleep time expires we need to keep sleeping
     int timeSinceLastRtcWakeup = (int)(LowPower.getRtcTime() - this->lastRtcWakeup);
@@ -408,12 +415,16 @@ uint8_t NodeManager::payloadAvailable(void){
     return payloadBufferFill;
 }
 
+bool NodeManager::dataAccumulationEnabled(void){
+    return this->doDataAccumulation;
+}
+
 /*
 bool NodeManager::dataAvailable(void){
     return (sensorHasData[0] | sensorHasData[1] | sensorHasData[2] | sensorHasData[3] | sensorHasData[4] | sensorHasData[5]);
 }*/
 
-// TODO: make private -> create packet
+// TODO: support data accumulation
 void NodeManager::getSensorData(void){
     for(uint8_t i=0; i<this->nrSensors; i++){
         uint8_t cbIndex = this->sensorList[i].getCbNr();
@@ -430,7 +441,7 @@ void NodeManager::getSensorData(void){
 
                 DEBUG.print("Sensor ");
                 DEBUG.print(i);
-                DEBUG.print(" len:" );
+                DEBUG.print(" len: " );
                 DEBUG.print(len);
                 DEBUG.print(" data: ");
                 for(uint8_t j=0; j<len; j++){

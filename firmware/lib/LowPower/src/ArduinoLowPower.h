@@ -18,7 +18,6 @@
 
 #define RTC_ALARM_WAKEUP	0xFF
 
-//typedef void (*voidFuncPtr)( void ) ;
 typedef void (*onOffFuncPtr)( bool ) ;
 
 typedef enum{
@@ -28,7 +27,6 @@ typedef enum{
 	ANALOG_COMPARATOR_WAKEUP = 3
 } wakeup_reason;
 
-
 class ArduinoLowPowerClass {
 	public:
 		void idle(void);
@@ -37,16 +35,9 @@ class ArduinoLowPowerClass {
 			idle((uint32_t)millis);
 		}
 
-		void sleep(void);
 		void sleep(uint32_t millis);
 		void sleep(int millis) {
 			sleep((uint32_t)millis);
-		}
-
-		void deepSleep(void);
-		void deepSleep(uint32_t millis);
-		void deepSleep(int millis) {
-			deepSleep((uint32_t)millis);
 		}
 
 // start extra

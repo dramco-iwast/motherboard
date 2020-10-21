@@ -17,6 +17,10 @@ void ArduinoLowPowerClass::idle(uint32_t millis) {
 
 void ArduinoLowPowerClass::sleep(uint32_t millis) {
 	setAlarmIn(millis);
+	sleep();
+}
+
+void ArduinoLowPowerClass::sleep() {
 	SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
 	__DSB();
 	__WFI();

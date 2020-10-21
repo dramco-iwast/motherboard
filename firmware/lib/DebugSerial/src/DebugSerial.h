@@ -21,7 +21,14 @@
  *  License (T.B.D.)
  */
 
+#ifndef __DEBUG_SERIAL_H__
+#define __DEBUG_SERIAL_H__
+
 #include <Arduino.h>
+
+#ifdef SERIAL_DEBUG_OUTPUT
+#warning "Debug output enabled. Disable to save another 10 uA."
+#endif
 
 #define DEBUG_BAUD  115200
 
@@ -30,6 +37,21 @@ class DebugSerial{
         DebugSerial();
         void begin(unsigned long baud=DEBUG_BAUD);
         void flush(void);
+
+        void printHexBuf(uint8_t * buf, uint8_t size, bool newLine=true){
+            if(size){
+                this->print("0x");
+            }
+            for(uint8_t i=0; i<size; i++){
+                if(buf[i]<0x10){
+                    this->print("0");
+                }
+                this->print(buf[i], HEX);
+            }
+            if(newLine){
+                this->println();
+            }
+        }
 
         size_t print(const __FlashStringHelper *);
         size_t print(const String &);
@@ -56,3 +78,5 @@ class DebugSerial{
 };
 
 extern DebugSerial DEBUG;
+
+#endif /* __DEBUG_SERIAL_H__ */

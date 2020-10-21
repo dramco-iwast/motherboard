@@ -33,6 +33,7 @@
 
 #define AT_COMMAND_MAX_SIZE 32
 #define PAYLOAD_BUFFER_SIZE 64
+#define STATUS_MESSAGE_SIZE 16
 
 #define SerialAT SerialUSB
 
@@ -72,6 +73,10 @@ private:
     bool dataAvailable(void);
     void getSensorData(void);
 
+    void initStatusMessage(void);
+    void updateStatusMessage(uint16_t ctr, bool rescan=false);
+    bool copyToPayloadBuffer(uint8_t * buffer, uint8_t bufferSize);
+
     NonVolatileConfig * nvConfig;
 
     // motherboard id
@@ -93,13 +98,16 @@ private:
 
     uint8_t payloadBuffer[PAYLOAD_BUFFER_SIZE];
     uint8_t payloadBufferFill;
+    
     bool doDataAccumulation;
+
+    uint8_t statusMessage[STATUS_MESSAGE_SIZE];
+    uint8_t statusMessageLength;
 
     int sleepRemaining = 0;
     int lastRtcWakeup;
     int statusCounter;
+    int statusTimer;
 };
-
-
 
 #endif /*__NODE_MANAGER_H__*/

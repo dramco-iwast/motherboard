@@ -35,6 +35,22 @@
 #define SENSOR_IIC_BASE_ADDRESS         0x40
 #define SENSOR_IIC_END_ADDRESS          0x7F
 
+// Timing settings
+//#define POLL_WAKEUP_INTERVAL            60 // every 60 seconds (1 minute)
+#define POLL_WAKEUP_INTERVAL            10 //
+// #define STATUS_MESSAGE_INTERVAL         21600 / POLL_WAKEUP_INTERVAL // every 21600 seconds (6 hours)
+#define STATUS_MESSAGE_INTERVAL         30 / POLL_WAKEUP_INTERVAL
+
+// Message formatting
+#define STATUS_MSG_TYPE_BYTE            'S'
+#define IMMEDIATE_DATA_MSG_TYPE_BYTE    'I'
+#define ACCUMULATED_DATA_MSG_TYPE_BYTE  'A'
+#define MSG_TYPE_BYTE_IND               0
+#define MSG_MOTHERBOARD_ID_IND          1
+#define MSG_COUNTER_IND                 3
+#define MSG_DATA_ACCUMULATION_IND       5
+#define MSG_NR_SENSORS_IND              6
+#define MSG_SENSOR_ADDRESS_LIST_IND     7
 
 // List of interrupt pins
 uint8_t intPins[MAX_NR_OF_SENSORS] = {A3, A4, 8, 9, 38, 3};
@@ -150,6 +166,7 @@ NodeManager::NodeManager(uint16_t id){
     
     this->sleepRemaining = 0;
     this->lastRtcWakeup = 0;
+    this->statusTimer = STATUS_MESSAGE_INTERVAL-1;
     this->statusCounter = 0;
 
     this->nvConfig = new NonVolatileConfig();
@@ -160,7 +177,7 @@ NodeManager::NodeManager(uint16_t id){
 void NodeManager::begin(void){
     DEBUG.println(F("Initializing NodeManager..."));
 
-    DUMP_EEPROM(32);
+    //DUMP_EEPROM(32);
 
     // 1. Initialize interrupts pins
     for(uint8_t i=0; i<MAX_NR_OF_SENSORS; i++){
@@ -333,7 +350,9 @@ void NodeManager::runConfigMode(bool forever){
 
     DEBUG.println("Attach RTC callback.");
     LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
-    this->lastRtcWakeup = LowPower.getRtcTime();
+
+    DEBUG.println("Updating status message.");
+    this->initStatusMessage();
 
     DEBUG.println("Exit config mode.");
     delay(10);
@@ -352,7 +371,14 @@ void NodeManager::loop(void){
             DEBUG.println(i);
             this->sensorList[i].updateTime();
         }
-        this->statusCounter++;
+        this->statusTimer++;
+        if(this->statusTimer == STATUS_MESSAGE_INTERVAL){
+            this->statusTimer = 0;
+            // build status message
+            DEBUG.println("Status update needed.");
+            this->updateStatusMessage(this->statusCounter);
+            this->statusCounter++;
+        }
 
         rtcWakeUp = false;
     }
@@ -368,23 +394,27 @@ void NodeManager::sleep(void){
     // update sleep-time remaining
     // if we got woken up by an sensor interrupt before the sleep time expires we need to keep sleeping
     int timeSinceLastRtcWakeup = (int)(LowPower.getRtcTime() - this->lastRtcWakeup);
-    if(timeSinceLastRtcWakeup > 60){
-        timeSinceLastRtcWakeup = 0;
-    }
-    DEBUG.print(F("Tdiff: "));
-    DEBUG.println(timeSinceLastRtcWakeup);
-    this->sleepRemaining = 60 - timeSinceLastRtcWakeup;
+    DEBUG.print(F("Time elapsed since last wakeup: "));
+    DEBUG.print(timeSinceLastRtcWakeup);
+    DEBUG.println(F(" s."));
 
-    if((this->sleepRemaining > 0) ){
-        // sleep until wake-up event occurs
-        DEBUG.print(F("going to sleep for: "));
-        DEBUG.print(this->sleepRemaining);
+    if((timeSinceLastRtcWakeup > 0) && (timeSinceLastRtcWakeup < POLL_WAKEUP_INTERVAL)){
+        // Sleep until previously set alarm
+        DEBUG.println(F("Back to sleep"));
+        DEBUG.flush();
+        LowPower.sleep();
+    }
+    else{
+        // Set new RTC alarm and go to sleep
+        DEBUG.print(F("Sleep for "));
+        DEBUG.print(POLL_WAKEUP_INTERVAL);
         DEBUG.println(F(" s."));
         DEBUG.flush();
 
         // Enter standby mode
-        LowPower.sleep(this->sleepRemaining*1000);
+        LowPower.sleep((POLL_WAKEUP_INTERVAL-1)*1000);
     }
+
 }
 
 uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){
@@ -419,14 +449,20 @@ bool NodeManager::dataAccumulationEnabled(void){
     return this->doDataAccumulation;
 }
 
-/*
-bool NodeManager::dataAvailable(void){
-    return (sensorHasData[0] | sensorHasData[1] | sensorHasData[2] | sensorHasData[3] | sensorHasData[4] | sensorHasData[5]);
-}*/
-
 // TODO: support data accumulation
 void NodeManager::getSensorData(void){
-    for(uint8_t i=0; i<this->nrSensors; i++){
+    // New design: separate buffers (immediate / accumulated)
+    // then: this->copyToPayloadBuffer()
+
+    if(this->doDataAccumulation){
+
+    }
+    else{
+        // copy data into immediate buffer
+        // then immediately to 
+    }
+
+    /*for(uint8_t i=0; i<this->nrSensors; i++){
         uint8_t cbIndex = this->sensorList[i].getCbNr();
         if(sensorHasData[cbIndex]){
             sensorHasData[cbIndex] = false;
@@ -460,7 +496,17 @@ void NodeManager::getSensorData(void){
                 DEBUG.println(F("Payload buffer is full!"));
             }
         }
+    }*/
+}
+
+bool NodeManager::copyToPayloadBuffer(uint8_t * buffer, uint8_t bufferSize){
+    if((this->payloadBufferFill+bufferSize)<PAYLOAD_BUFFER_SIZE){
+        memcpy(payloadBuffer+this->payloadBufferFill, buffer, this->payloadBufferFill);
+        return true;
     }
+
+    DEBUG.println(F("Payload buffer is full!"));
+    return false;
 }
 
 void NodeManager::processAtCommands(void){
@@ -536,7 +582,7 @@ void NodeManager::processAtCommands(void){
                 // get poll interval for (id, metric)
                 if(this->nvConfig->getSensorPollInterval(ind, metric, &pollInterval)){ // false if either metric or id are invalid/incorrect
                     SerialAT.print("+POL: ");
-                    SerialAT.println(pollInterval*60);
+                    SerialAT.println(pollInterval*POLL_WAKEUP_INTERVAL);
                     commandProcessed = true;
                 }
                 else{
@@ -559,8 +605,8 @@ void NodeManager::processAtCommands(void){
                 char * nextNr = strchr(argStr+3, ' ');
                 uint16_t pol = strtol(nextNr, NULL, 10);
 
-                if(!(pol % 60)){
-                    uint16_t polMinutes = (uint16_t)(pol / 60);
+                if(!(pol % POLL_WAKEUP_INTERVAL)){
+                    uint16_t polMinutes = (uint16_t)(pol / POLL_WAKEUP_INTERVAL);
                     if(this->nvConfig->storeSensorConfigField(ind, metric, sensorConfPollInterval, polMinutes)){
                         SerialAT.println("OK");
                         commandProcessed = true;
@@ -702,33 +748,6 @@ void NodeManager::processAtCommands(void){
                 commandProcessed = true;
             }
 
-            /*// Set sensor low threshold level 
-            if(strstr(specific, "TIME=")){ // AT+TIME=<epoch>
-                char * argStr = specific + 5;
-                uint32_t epoch = strtol(argStr, NULL, 10);
-
-                SerialAT.print("epoch:" );
-                SerialAT.println(epoch);
-
-                if(epoch != 0){
-                    LowPower.setRtcTime(epoch);
-                    SerialAT.println("OK");
-                    commandProcessed = true;
-                }
-                else{
-                    errorCode = AT_WRONG_VALUE;
-                }
-            }
-
-            // Set sensor low threshold level 
-            if(strstr(specific, "TIME?")){ // AT+TIME?
-                SerialAT.print("epoch:" );
-                SerialAT.println(LowPower.getRtcTime());
-                SerialAT.println("OK");
-
-                commandProcessed = true;
-            }*/
-
         }
         else{
             errorCode = AT_WRONG_COMMAND;
@@ -784,4 +803,44 @@ void NodeManager::configureSensors(void){
 
 bool NodeManager::dataAvailable(void){
     return (sensorHasData[0] | sensorHasData[1] | sensorHasData[2] | sensorHasData[3] | sensorHasData[4] | sensorHasData[5]);
+}
+
+
+void NodeManager::initStatusMessage(void){
+    this->statusMessage[MSG_TYPE_BYTE_IND] = STATUS_MSG_TYPE_BYTE;
+    
+    this->statusMessage[MSG_MOTHERBOARD_ID_IND] = (uint8_t)(this->id >> 8);
+    this->statusMessage[MSG_MOTHERBOARD_ID_IND+1] = (uint8_t)(this->id & 0x00FF);
+    
+    if(this->doDataAccumulation){
+        this->statusMessage[MSG_DATA_ACCUMULATION_IND] = 0x01;
+    }
+    else{
+        this->statusMessage[MSG_DATA_ACCUMULATION_IND] = 0x00;
+    }
+    
+    this->statusMessage[MSG_NR_SENSORS_IND] = this->nrSensors;
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        this->statusMessage[MSG_SENSOR_ADDRESS_LIST_IND+i] = this->sensorList[i].getIicAddress();
+    }
+
+    this->statusMessageLength = MSG_SENSOR_ADDRESS_LIST_IND + this->nrSensors;
+
+    // TODO: make sure we stay within the buffer
+}
+
+
+void NodeManager::updateStatusMessage(uint16_t ctr, bool rescan){
+    this->statusMessage[MSG_COUNTER_IND] = (uint8_t)(ctr >> 8);
+    this->statusMessage[MSG_COUNTER_IND+1] = (uint8_t)(ctr & 0x00FF);
+
+    if(rescan){
+        // TODO: poll sensors again
+    }
+
+    // copy to buffer
+    if(this->copyToPayloadBuffer(this->statusMessage, this->statusMessageLength)){
+        DEBUG.print("Status message: ");
+        DEBUG.printHexBuf(this->statusMessage, this->statusMessageLength);
+    }
 }

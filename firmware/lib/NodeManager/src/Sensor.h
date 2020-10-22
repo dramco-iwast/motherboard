@@ -26,6 +26,7 @@
 
 #include <Arduino.h>
 
+#define MAX_NR_METRICS      8
 
 /* The Sensor class specifies a common interface to all the sensors 
  * connected to the motherboad.
@@ -71,7 +72,7 @@ protected:
   uint8_t cbNr;
   
   uint8_t nrMetrics;  // nr of different metrics supported by the sensor, each metric measurement takes up 2 bytes
-  uint8_t mLen;       // (max nr of measurement bytes=) nrMetrics * 2 
+  uint8_t mLen;       // (max nr of measurement bytes=) nrMetrics * 2
 
   uint16_t * pollInterval;
   uint16_t * pollTimer;

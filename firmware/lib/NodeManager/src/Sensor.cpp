@@ -52,10 +52,6 @@ static bool readSensorData(uint8_t address, uint8_t command, uint8_t * data, uin
   //delay(1); // give the device some time to return the data
   uint8_t stat = Wire.endTransmission();
   if(stat){
-    /*Serial.print("addr: 0x");
-    Serial.println(address, HEX);
-    Serial.print("write (read) end transm.: ");
-    Serial.println(stat);*/
     return false;
   }
 
@@ -70,10 +66,6 @@ static bool readSensorData(uint8_t address, uint8_t command, uint8_t * data, uin
   }
 
   if(i){
-    /*Serial.print("addr: 0x");
-    Serial.println(address, HEX);
-    Serial.print("read end. no more data: ");
-    Serial.println(i);*/
     return false;
   }
 
@@ -122,8 +114,6 @@ bool Sensor::pollAddress(uint8_t iicAddress){
   do{ // POLL sensor
     if(readSensorData(iicAddress, CMD_POLL, &pollResponse, 1)){
       if(pollResponse==DEFAULT_ACK){
-        /*Serial.print("Sensor at address: 0x");
-        Serial.println(iicAddress, HEX);*/
         
         return true;
       }
@@ -151,11 +141,15 @@ bool Sensor::init(uint8_t iicAddress){
     return false;
   }
 
+  if(this->nrMetrics > MAX_NR_METRICS){
+    return false;
+  }
+
   // set length of al measurements combined
   this->mLen = this->nrMetrics * 2;
-  // allicate memory for timing the measurements
-  this->pollInterval = (uint16_t *)malloc(sizeof(uint16_t)*this->nrMetrics);
-  this->pollTimer = (uint16_t *)malloc(sizeof(uint16_t)*this->nrMetrics);
+  // allicate memory for timing and storing the measurements
+  this->pollInterval = (uint16_t *)malloc(sizeof(uint16_t) * this->nrMetrics);
+  this->pollTimer = (uint16_t *)malloc(sizeof(uint16_t) * this->nrMetrics);
 
   return true;
 }

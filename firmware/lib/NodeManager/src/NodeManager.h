@@ -28,12 +28,64 @@
 #include <Arduino.h>
 #include "NonVolatileConfig.h"
 #include "Sensor.h"
+#include "device_settings.h"
 
-#define CONFIG_DURATION_MS  5000
+// CONFIG_DURATION_MS defines how long the motherboard will listen for
+// incoming AT commands before exiting configuration mode.
+// Note: once anything is received over the serial configuration interface,
+// the motherboard will remain in configuration mode until the AT+CLS command
+// is received.
+#define CONFIG_DURATION_MS              5000
 
-#define AT_COMMAND_MAX_SIZE 32
-#define PAYLOAD_BUFFER_SIZE 64
-#define STATUS_MESSAGE_SIZE 16
+// Maximum number of sensors that is being supported
+#define MAX_NR_OF_SENSORS               6
+// Safety check
+#if MAX_NR_OF_SENSORS > 6
+#error "The hardware does not support more than 6 sensors."
+#endif
+
+// Address range that is used to scan for sensors 
+#define SENSOR_SCAN_START_ADDRESS       0x40
+#define SENSOR_SCAN_END_ADDRESS         0x7F
+
+// Timing settings
+//#define POLL_WAKEUP_INTERVAL            60 // every 60 seconds (1 minute)
+#define POLL_WAKEUP_INTERVAL            10 //
+// #define STATUS_MESSAGE_INTERVAL         21600 / POLL_WAKEUP_INTERVAL // every 21600 seconds (6 hours)
+#define STATUS_MESSAGE_INTERVAL         30 / POLL_WAKEUP_INTERVAL
+
+// Message formatting (general)
+#define MSG_TYPE_BYTE_IND               0
+#ifndef LORA_MAX_PAYLOAD_SIZE
+#error "LORA_MAX_PAYLOAD_SIZE is not defined."
+#else
+#define PAYLOAD_BUFFER_SIZE             LORA_MAX_PAYLOAD_SIZE
+#endif
+
+// Message formatting (status message)
+#define STATUS_MSG_TYPE_BYTE            'S'
+#define MSG_MOTHERBOARD_ID_IND          1
+#define MSG_COUNTER_IND                 3
+#define MSG_DATA_ACCUMULATION_IND       5
+#define MSG_NR_SENSORS_IND              6
+#define MSG_SENSOR_ADDRESS_LIST_IND     7
+#define STATUS_MESSAGE_SIZE             ( MSG_SENSOR_ADDRESS_LIST_IND + MAX_NR_OF_SENSORS )
+
+// Message formatting (immediate data)
+#define IMMEDIATE_DATA_MSG_TYPE_BYTE    'I'
+#define MSG_SENSOR_ADDRESS_IND          1
+#define MSG_SENSOR_DATA_IND             2
+#define IMMEDIATE_DATA_MESSAGE_SIZE     ( 2 + ( 2 * MAX_NR_METRICS) )
+
+// Message formatting (accumulated data)
+#define ACCUMULATED_DATA_MSG_TYPE_BYTE  'A'
+
+#ifndef LORA_ACCUMULATE_THRESHOLD
+#define LORA_ACCUMULATE_THRESHOLD       PAYLOAD_BUFFER_SIZE / 2
+#warning "LORA_ACCUMULATE_TRESHOLD was not defined. Using default setting."
+#endif
+
+#define AT_COMMAND_MAX_SIZE             32
 
 #define SerialAT SerialUSB
 

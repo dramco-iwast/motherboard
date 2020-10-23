@@ -26,7 +26,7 @@
 
 #define MOTHERBOARD_ID				0x474F
 #define LORA_MAX_PAYLOAD_SIZE		48
-//#define LORA_AGGREGATE_THRESHOLD	20
+#define LORA_ACCUMULATE_THRESHOLD	30
 
 /* LoRaWAN section ***********************************************************************/
 
@@ -81,8 +81,6 @@
 /*****************************************************************************************
  * END OF CONFIGURABLE SECTION
  *****************************************************************************************/
-
-
 
 
 

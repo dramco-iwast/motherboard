@@ -28,30 +28,6 @@
 #include "NodeManager.h"
 #include "DebugSerial.h"
 
-// Maximum number of sensors that is being supported
-#define MAX_NR_OF_SENSORS               6
-
-// Address range that is used to scan for sensors 
-#define SENSOR_IIC_BASE_ADDRESS         0x40
-#define SENSOR_IIC_END_ADDRESS          0x7F
-
-// Timing settings
-//#define POLL_WAKEUP_INTERVAL            60 // every 60 seconds (1 minute)
-#define POLL_WAKEUP_INTERVAL            10 //
-// #define STATUS_MESSAGE_INTERVAL         21600 / POLL_WAKEUP_INTERVAL // every 21600 seconds (6 hours)
-#define STATUS_MESSAGE_INTERVAL         30 / POLL_WAKEUP_INTERVAL
-
-// Message formatting
-#define STATUS_MSG_TYPE_BYTE            'S'
-#define IMMEDIATE_DATA_MSG_TYPE_BYTE    'I'
-#define ACCUMULATED_DATA_MSG_TYPE_BYTE  'A'
-#define MSG_TYPE_BYTE_IND               0
-#define MSG_MOTHERBOARD_ID_IND          1
-#define MSG_COUNTER_IND                 3
-#define MSG_DATA_ACCUMULATION_IND       5
-#define MSG_NR_SENSORS_IND              6
-#define MSG_SENSOR_ADDRESS_LIST_IND     7
-
 // List of interrupt pins
 uint8_t intPins[MAX_NR_OF_SENSORS] = {A3, A4, 8, 9, 38, 3};
 
@@ -200,7 +176,7 @@ void NodeManager::begin(void){
     Sensor * t =  new Sensor(); // temporary sensor object for interfacing with the bus
 
     // Test all addresses for a response
-    for(uint8_t address=SENSOR_IIC_BASE_ADDRESS; address<SENSOR_IIC_END_ADDRESS+1; address++){
+    for(uint8_t address=SENSOR_SCAN_START_ADDRESS; address<SENSOR_SCAN_END_ADDRESS+1; address++){
         if(t->pollAddress(address)){
             DEBUG.print(F("Found sensor at address: 0x"));
             DEBUG.println(address, HEX);
@@ -394,6 +370,11 @@ void NodeManager::sleep(void){
     // update sleep-time remaining
     // if we got woken up by an sensor interrupt before the sleep time expires we need to keep sleeping
     int timeSinceLastRtcWakeup = (int)(LowPower.getRtcTime() - this->lastRtcWakeup);
+     if(this->lastRtcWakeup == 0){
+        DEBUG.println(F("First time sleep."));
+        timeSinceLastRtcWakeup = 0;
+        this->lastRtcWakeup = LowPower.getRtcTime();
+    }
     DEBUG.print(F("Time elapsed since last wakeup: "));
     DEBUG.print(timeSinceLastRtcWakeup);
     DEBUG.println(F(" s."));
@@ -419,7 +400,7 @@ void NodeManager::sleep(void){
 
 uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){
     if(!sendBuffer){
-        DEBUG.println("Buffer = NULL");
+        DEBUG.println(F("Buffer = NULL"));
         return 0;
     }
     uint8_t bytesToCopy = 0;
@@ -435,78 +416,103 @@ uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){
 
     DEBUG.print("Copied ");
     DEBUG.print(bytesToCopy);
-    DEBUG.println("bytes.");
+    DEBUG.println(" bytes.");
     payloadBufferFill = 0;
+
+    this->accMsgCounter = 0;
 
     return bytesToCopy;
 }
 
 uint8_t NodeManager::payloadAvailable(void){
-    return payloadBufferFill;
+    if(this->doDataAccumulation){
+        if(this->payloadBufferFill > LORA_ACCUMULATE_THRESHOLD){
+            return this->payloadBufferFill;
+        }
+        else{
+            return 0;
+        }
+    }
+
+    return this->payloadBufferFill;
 }
 
 bool NodeManager::dataAccumulationEnabled(void){
     return this->doDataAccumulation;
 }
 
-// TODO: support data accumulation
+// Read from each sensor that has data available and copy data to payload buffer
 void NodeManager::getSensorData(void){
-    // New design: separate buffers (immediate / accumulated)
-    // then: this->copyToPayloadBuffer()
-
-    if(this->doDataAccumulation){
-
-    }
-    else{
-        // copy data into immediate buffer
-        // then immediately to 
-    }
-
-    /*for(uint8_t i=0; i<this->nrSensors; i++){
+    // compose immediate data message
+    // loop through sensors in the list
+    for(uint8_t i=0; i<this->nrSensors; i++){
+        // find callback assigned to sensor
         uint8_t cbIndex = this->sensorList[i].getCbNr();
+        // see which sensor has data available
         if(sensorHasData[cbIndex]){
             sensorHasData[cbIndex] = false;
-            uint8_t tempData[20];
+
             uint8_t len = 0;
 
-            this->sensorList[i].readMeasurementData(tempData, &len);
+            if(this->doDataAccumulation){
+                // format accumulated data message
+                this->aDataMessage[MSG_TYPE_BYTE_IND] = ACCUM_DATA_MSG_TYPE_BYTE;
+                this->aDataMessage[ACCUM_DATA_MSG_ADDRESS_IND] = this->sensorList[i].getIicAddress();
+                uint32_t curEpoch = LowPower.getRtcTime();
+                uint16_t elapsed = 0;
 
-            if((payloadBufferFill+len)<PAYLOAD_BUFFER_SIZE){
-                // copy data to payload buffer
-                payloadBuffer[payloadBufferFill++] = this->sensorList[i].getIicAddress();
-
-                DEBUG.print("Sensor ");
-                DEBUG.print(i);
-                DEBUG.print(" len: " );
-                DEBUG.print(len);
-                DEBUG.print(" data: ");
-                for(uint8_t j=0; j<len; j++){
-                    if(tempData[j]<16){
-                        DEBUG.print("0");
-                    }
-                    DEBUG.print(tempData[j], HEX);
-
-                    payloadBuffer[payloadBufferFill++] = tempData[j];
+                if(this->accMsgCounter != 0){
+                    elapsed = (uint16_t)(curEpoch - this->accMsgCounter);
                 }
-                DEBUG.println();
-                DEBUG.print("timestamp: ");
-                DEBUG.println(LowPower.getRtcTime());
+                this->accMsgCounter = curEpoch;
+
+                this->aDataMessage[ACCUM_DATA_MSG_SECS_ELAPSED_IND] = (uint8_t)(elapsed >> 8);
+                this->aDataMessage[ACCUM_DATA_MSG_SECS_ELAPSED_IND+1] = (uint8_t)(elapsed & 0x00FF);
+
+                this->sensorList[i].readMeasurementData(this->aDataMessage+ACCUM_DATA_MSG_DATA_IND, &len);
+
+                // copy to buffer
+                if(this->copyToPayloadBuffer(this->aDataMessage, len+ACCUM_DATA_MSG_DATA_IND)){
+                    DEBUG.print(F("Accumulated data message: "));
+                    DEBUG.printHexBuf(this->aDataMessage, len+ACCUM_DATA_MSG_DATA_IND);
+                }
+
             }
             else{
-                DEBUG.println(F("Payload buffer is full!"));
+                // format immediate data message
+                this->iDataMessage[MSG_TYPE_BYTE_IND] = IMMEDIATE_DATA_MSG_TYPE_BYTE;
+                this->iDataMessage[IMMEDIATE_DATA_MSG_ADDRESS_IND] = this->sensorList[i].getIicAddress();
+                this->sensorList[i].readMeasurementData(this->iDataMessage+IMMEDIATE_DATA_MSG_DATA_IND, &len);
+
+                // copy to buffer
+                if(this->copyToPayloadBuffer(this->iDataMessage, len+IMMEDIATE_DATA_MSG_DATA_IND)){
+                    DEBUG.print(F("Immediate data message: "));
+                    DEBUG.printHexBuf(this->iDataMessage, len+IMMEDIATE_DATA_MSG_DATA_IND);
+                }
             }
         }
-    }*/
+    }
 }
 
 bool NodeManager::copyToPayloadBuffer(uint8_t * buffer, uint8_t bufferSize){
-    if((this->payloadBufferFill+bufferSize)<PAYLOAD_BUFFER_SIZE){
-        memcpy(payloadBuffer+this->payloadBufferFill, buffer, this->payloadBufferFill);
-        return true;
-    }
+    // DEBUG output
+    DEBUG.print(F("Current payload size: is "));
+    DEBUG.println(this->payloadBufferFill);
+    DEBUG.print(F("Adding another "));
+    DEBUG.println(bufferSize);
+    DEBUG.print(F("Copying buffer: "));
+    DEBUG.printHexBuf(buffer, bufferSize);
 
-    DEBUG.println(F("Payload buffer is full!"));
-    return false;
+
+    if((this->payloadBufferFill+bufferSize)>PAYLOAD_BUFFER_SIZE){
+        DEBUG.println(F("Payload buffer is full!"));
+        return false;
+    }
+ 
+    memcpy((void*)(payloadBuffer+this->payloadBufferFill), (void *)buffer, bufferSize);
+    this->payloadBufferFill += bufferSize;
+
+    return true;
 }
 
 void NodeManager::processAtCommands(void){
@@ -809,38 +815,36 @@ bool NodeManager::dataAvailable(void){
 void NodeManager::initStatusMessage(void){
     this->statusMessage[MSG_TYPE_BYTE_IND] = STATUS_MSG_TYPE_BYTE;
     
-    this->statusMessage[MSG_MOTHERBOARD_ID_IND] = (uint8_t)(this->id >> 8);
-    this->statusMessage[MSG_MOTHERBOARD_ID_IND+1] = (uint8_t)(this->id & 0x00FF);
+    this->statusMessage[STATUS_MSG_MOTHERBOARD_ID_IND] = (uint8_t)(this->id >> 8);
+    this->statusMessage[STATUS_MSG_MOTHERBOARD_ID_IND+1] = (uint8_t)(this->id & 0x00FF);
     
     if(this->doDataAccumulation){
-        this->statusMessage[MSG_DATA_ACCUMULATION_IND] = 0x01;
+        this->statusMessage[STATUS_MSG_DATA_ACCUM_IND] = 0x01;
     }
     else{
-        this->statusMessage[MSG_DATA_ACCUMULATION_IND] = 0x00;
+        this->statusMessage[STATUS_MSG_DATA_ACCUM_IND] = 0x00;
     }
-    
-    this->statusMessage[MSG_NR_SENSORS_IND] = this->nrSensors;
+
+    this->statusMessage[STATUS_MSG_NR_SENSORS_IND] = this->nrSensors;
     for(uint8_t i=0; i<this->nrSensors; i++){
-        this->statusMessage[MSG_SENSOR_ADDRESS_LIST_IND+i] = this->sensorList[i].getIicAddress();
+        this->statusMessage[STATUS_MSG_ADDRESS_LIST_IND+i] = this->sensorList[i].getIicAddress();
     }
 
-    this->statusMessageLength = MSG_SENSOR_ADDRESS_LIST_IND + this->nrSensors;
-
-    // TODO: make sure we stay within the buffer
+    this->statusMessageSize = STATUS_MSG_ADDRESS_LIST_IND + this->nrSensors;
 }
 
 
 void NodeManager::updateStatusMessage(uint16_t ctr, bool rescan){
-    this->statusMessage[MSG_COUNTER_IND] = (uint8_t)(ctr >> 8);
-    this->statusMessage[MSG_COUNTER_IND+1] = (uint8_t)(ctr & 0x00FF);
+    this->statusMessage[STATUS_MSG_COUNTER_IND] = (uint8_t)(ctr >> 8);
+    this->statusMessage[STATUS_MSG_COUNTER_IND+1] = (uint8_t)(ctr & 0x00FF);
 
     if(rescan){
         // TODO: poll sensors again
     }
 
     // copy to buffer
-    if(this->copyToPayloadBuffer(this->statusMessage, this->statusMessageLength)){
-        DEBUG.print("Status message: ");
-        DEBUG.printHexBuf(this->statusMessage, this->statusMessageLength);
+    if(this->copyToPayloadBuffer(this->statusMessage, this->statusMessageSize)){
+        DEBUG.print(F("Status message: "));
+        DEBUG.printHexBuf(this->statusMessage, this->statusMessageSize);
     }
 }

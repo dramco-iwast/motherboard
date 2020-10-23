@@ -10,6 +10,8 @@ LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
 
 uint8_t buf[LORA_MAX_PAYLOAD_SIZE];
 
+void flashLed(void);
+
 void setup(){
   // start serial interface for printing debug messages
   DEBUG.begin();
@@ -19,49 +21,54 @@ void setup(){
   
   // configure lora (no networking yet)
   lora.begin(settings);
-
-  // put your setup code here, to run once:
-  nm.begin();
-  nm.runConfigMode(); // run config
-  //nm.runConfigMode(true); // run config forever
+  flashLed();
 
   // join lora network
   lora.join();
 
   // put lora modem in sleep (save energy)
-  lora.sleep();
+  lora.sleep(); // saves approx. 2.5 mA
+
+  // start the node manager
+  // by now, all connected sensors should be initialized
+  nm.begin();
+  nm.runConfigMode(); // run config
+  //nm.runConfigMode(true); // run config forever
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  // let the node manager handle the sleeping and sensing
   nm.loop();
 
-  // aggregate by using payload size (return value of NodeManager::payloadAvailable())
+  // we are awake -> check for data to send
   uint8_t pSize = nm.payloadAvailable();
-
-#ifdef LORA_AGGREGATE_THRESHOLD
-  if(pSize > LORA_AGGREGATE_THRESHOLD){
-#else
   if(pSize > 0){
-#endif
     DEBUG.println("\nMAIN APP: Data available!");
+    DEBUG.print(pSize);
+    DEBUG.println(" bytes.");
     if(nm.getLoraPayload(buf, LORA_MAX_PAYLOAD_SIZE)){
       DEBUG.print("Payload: ");
-      for(uint8_t i=0; i<pSize; i++){
-        if(buf[i] < 0x10){
-          DEBUG.print("0");
-        }
-        DEBUG.print(buf[i], HEX);
-      }
-      DEBUG.println("\n");
+      DEBUG.printHexBuf(buf, pSize);
 
+      // send the data
       lora.wake();
       lora.sendData(buf, pSize);
       lora.sleep();
     }
     else{
-      DEBUG.println("Empty payload.\n");
+      DEBUG.println("Empty payload.");
     }
   }
 
+  nm.sleep();
+}
+
+void flashLed(void){
+  lora.ledOn();
+  delay(200);
+  lora.ledOff();
+  delay(100);
+  lora.ledOn();
+  delay(200);
+  lora.ledOff();
 }

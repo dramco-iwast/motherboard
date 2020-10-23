@@ -35,7 +35,7 @@
 // Note: once anything is received over the serial configuration interface,
 // the motherboard will remain in configuration mode until the AT+CLS command
 // is received.
-#define CONFIG_DURATION_MS              5000
+#define CONFIG_DURATION_MS              15000
 
 // Maximum number of sensors that is being supported
 #define MAX_NR_OF_SENSORS               6
@@ -49,10 +49,10 @@
 #define SENSOR_SCAN_END_ADDRESS         0x7F
 
 // Timing settings
-//#define POLL_WAKEUP_INTERVAL            60 // every 60 seconds (1 minute)
-#define POLL_WAKEUP_INTERVAL            10 //
-// #define STATUS_MESSAGE_INTERVAL         21600 / POLL_WAKEUP_INTERVAL // every 21600 seconds (6 hours)
-#define STATUS_MESSAGE_INTERVAL         30 / POLL_WAKEUP_INTERVAL
+#define POLL_WAKEUP_INTERVAL            60 // every 60 seconds (1 minute)
+//#define POLL_WAKEUP_INTERVAL            10 //
+#define STATUS_MESSAGE_INTERVAL         21600 / POLL_WAKEUP_INTERVAL // every 21600 seconds (6 hours)
+//#define STATUS_MESSAGE_INTERVAL         30 / POLL_WAKEUP_INTERVAL
 
 // Message formatting (general)
 #define MSG_TYPE_BYTE_IND               0
@@ -64,25 +64,25 @@
 
 // Message formatting (status message)
 #define STATUS_MSG_TYPE_BYTE            'S'
-#define MSG_MOTHERBOARD_ID_IND          1
-#define MSG_COUNTER_IND                 3
-#define MSG_DATA_ACCUMULATION_IND       5
-#define MSG_NR_SENSORS_IND              6
-#define MSG_SENSOR_ADDRESS_LIST_IND     7
-#define STATUS_MESSAGE_SIZE             ( MSG_SENSOR_ADDRESS_LIST_IND + MAX_NR_OF_SENSORS )
+#define STATUS_MSG_MOTHERBOARD_ID_IND   1
+#define STATUS_MSG_COUNTER_IND          3
+#define STATUS_MSG_DATA_ACCUM_IND       5
+#define STATUS_MSG_NR_SENSORS_IND       6
+#define STATUS_MSG_ADDRESS_LIST_IND     7
+#define STATUS_MSG_SIZE                 ( STATUS_MSG_ADDRESS_LIST_IND + MAX_NR_OF_SENSORS )
 
 // Message formatting (immediate data)
 #define IMMEDIATE_DATA_MSG_TYPE_BYTE    'I'
-#define MSG_SENSOR_ADDRESS_IND          1
-#define MSG_SENSOR_DATA_IND             2
-#define IMMEDIATE_DATA_MESSAGE_SIZE     ( IMMEDIATE_DATA_MESSAGE_SIZE + ( 2 * MAX_NR_METRICS) )
+#define IMMEDIATE_DATA_MSG_ADDRESS_IND  1
+#define IMMEDIATE_DATA_MSG_DATA_IND     2
+#define IMMEDIATE_DATA_MSG_MAX_SIZE     ( IMMEDIATE_DATA_MSG_DATA_IND + ( 2 * MAX_NR_METRICS) )
 
 // Message formatting (accumulated data)
-#define ACCUMULATED_DATA_MSG_TYPE_BYTE  'A'
-#define MSG_SENSOR_ADDRESS_IND          1
-#define MSG_SECONDS_ELAPSED_IND         2
-#define MSG_SENSOR_DATA_IND             4
-#define IMMEDIATE_DATA_MESSAGE_SIZE     ( MSG_SENSOR_DATA_IND + ( 2 * MAX_NR_METRICS) )
+#define ACCUM_DATA_MSG_TYPE_BYTE        'A'
+#define ACCUM_DATA_MSG_ADDRESS_IND      1
+#define ACCUM_DATA_MSG_SECS_ELAPSED_IND 2
+#define ACCUM_DATA_MSG_DATA_IND         4
+#define ACCUM_DATA_MSG_MAX_SIZE         ( ACCUM_DATA_MSG_DATA_IND + ( 2 * MAX_NR_METRICS) )
 
 #ifndef LORA_ACCUMULATE_THRESHOLD
 #define LORA_ACCUMULATE_THRESHOLD       PAYLOAD_BUFFER_SIZE / 2
@@ -153,12 +153,15 @@ private:
     bool atTimerEnabled;
 
     uint8_t payloadBuffer[PAYLOAD_BUFFER_SIZE];
-    uint8_t payloadBufferFill;
+    uint8_t payloadBufferFill = 0;
     
     bool doDataAccumulation;
+    uint32_t accMsgCounter = 0;
 
-    uint8_t statusMessage[STATUS_MESSAGE_SIZE];
-    uint8_t statusMessageLength;
+    uint8_t statusMessage[STATUS_MSG_SIZE];
+    uint8_t statusMessageSize;
+    uint8_t iDataMessage[IMMEDIATE_DATA_MSG_MAX_SIZE];
+    uint8_t aDataMessage[ACCUM_DATA_MSG_MAX_SIZE];
 
     int sleepRemaining = 0;
     int lastRtcWakeup;

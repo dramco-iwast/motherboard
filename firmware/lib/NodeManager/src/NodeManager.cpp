@@ -25,6 +25,7 @@
 #include <FlashAsEEPROM.h>
 #include <Wire.h>
 #include <ArduinoLowPower.h>
+#include <Adafruit_SleepyDog.h>
 #include "NodeManager.h"
 #include "DebugSerial.h"
 
@@ -168,7 +169,7 @@ void NodeManager::begin(void){
     delay(500);
     Wire.begin();
     Wire.setClock(100000);
-    Wire.setTimeout(500);
+   // Wire.setTimeout(500);
 
     // 3. Build a sensor list (i.e. list of Sensor objects for interfacing with the sensor boards)
     uint8_t detectedSensors[MAX_NR_OF_SENSORS];
@@ -294,17 +295,22 @@ void NodeManager::begin(void){
  * The default behaviour is to exit config mode when there is no serial communication within 
  * CONFIG_DURATION_MS. If there is, however, config mode can be exited by sending the "AT+CLS" command.
  */
-void NodeManager::runConfigMode(bool forever){
-    while(this->conFigMode || forever){
-        // disable at commands after 10000
-        if(this->atTimerEnabled){
-            if(millis() - this->atStartTime > CONFIG_DURATION_MS){
-                this->conFigMode = false;
-            }
-        }
+//void NodeManager::runConfigMode(bool forever){
+//    while(this->conFigMode || forever){
 
-        // Run the configuration interface
-        this->processAtCommands();
+void NodeManager::runConfigMode(bool skip){
+    if(!skip){
+        while(this->conFigMode){
+            // disable at commands after 10000
+            if(this->atTimerEnabled){
+                if(millis() - this->atStartTime > CONFIG_DURATION_MS){
+                    this->conFigMode = false;
+                }
+            }
+
+            // Run the configuration interface
+            this->processAtCommands();
+        }
     }
 
     // We have exited configuration mode
@@ -335,6 +341,10 @@ void NodeManager::runConfigMode(bool forever){
 }
 
 void NodeManager::loop(void){
+    // we are awake
+    Watchdog.reset();
+    Watchdog.enable(5000);
+
     // stuff to do on rtc wake-up
     if(rtcWakeUp){
         this->lastRtcWakeup = LowPower.getRtcTime();
@@ -366,6 +376,9 @@ void NodeManager::loop(void){
         // get data and add to payload
         this->getSensorData();
     }
+
+    DEBUG.println(F("End of NodeManager loop() -> feeding the watchdog"));
+    Watchdog.reset();
 }
 
 void NodeManager::sleep(void){
@@ -380,6 +393,9 @@ void NodeManager::sleep(void){
     DEBUG.print(F("Time elapsed since last wakeup: "));
     DEBUG.print(timeSinceLastRtcWakeup);
     DEBUG.println(F(" s."));
+
+    DEBUG.println(F("Watchdog disabled."));
+    Watchdog.disable();
 
     if((timeSinceLastRtcWakeup > 0) && (timeSinceLastRtcWakeup < POLL_WAKEUP_INTERVAL)){
         // Sleep until previously set alarm

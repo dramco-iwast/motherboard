@@ -4,6 +4,7 @@
 #include "LoRaWAN.h"
 #include "device_settings.h"
 #include "DebugSerial.h"
+#include "Adafruit_SleepyDog.h"
 
 NodeManager nm(MOTHERBOARD_ID);
 LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
@@ -15,6 +16,20 @@ void flashLed(void);
 void setup(){
   // start serial interface for printing debug messages
   DEBUG.begin();
+
+  // check if watchodog was the cause of reset
+  // TODO: check effect on power consumption
+  // TODO: check if this helps to improve application robustness
+  bool skipConfig = false;
+  if(Watchdog.resetCause() & PM_RCAUSE_WDT){
+    DEBUG.println(F("Watchdog reset -> skipping config."));
+    
+    Wire.end(); // needed?
+    skipConfig = true;
+    
+    // TODO: remove, because only for testing
+    while(1);
+  };
 
   // USB Serial for configuration
   SerialAT.begin(115200); 
@@ -32,7 +47,7 @@ void setup(){
   // start the node manager
   // by now, all connected sensors should be initialized
   nm.begin();
-  nm.runConfigMode(); // run config
+  nm.runConfigMode(skipConfig); // run config
   //nm.runConfigMode(true); // run config forever
 }
 

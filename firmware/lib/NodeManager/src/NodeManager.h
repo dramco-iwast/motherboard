@@ -114,7 +114,8 @@ public:
     //  - etc.
     void begin(void);
 
-    void runConfigMode(bool forever=false);
+    void runConfigMode(bool skip=false);
+    //void runConfigMode(bool forever=false);
 
     // main operation
     void loop(void);

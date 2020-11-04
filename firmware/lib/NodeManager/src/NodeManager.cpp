@@ -351,9 +351,11 @@ void NodeManager::loop(void){
         if(this->statusTimer == STATUS_MESSAGE_INTERVAL){
             this->statusTimer = 0;
             // build status message
+#ifndef NO_STATUS_MESSAGES            
             DEBUG.println("Status update needed.");
             this->updateStatusMessage(this->statusCounter);
             this->statusCounter++;
+#endif
         }
 
         rtcWakeUp = false;

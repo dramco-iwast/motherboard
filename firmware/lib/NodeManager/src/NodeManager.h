@@ -167,6 +167,7 @@ private:
     int lastRtcWakeup;
     int statusCounter;
     int statusTimer;
+    bool sendStatusMessage = false;
 };
 
 #endif /*__NODE_MANAGER_H__*/

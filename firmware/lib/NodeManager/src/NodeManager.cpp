@@ -425,7 +425,15 @@ uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){
 }
 
 uint8_t NodeManager::payloadAvailable(void){
+    // if the payload buffer contains a status message -> send regardless of data accumulation
+    if(this->sendStatusMessage){
+        this->sendStatusMessage = false;
+        return this->payloadBufferFill;
+    }
+
+    // only data (and data accumulation is enabled)
     if(this->doDataAccumulation){
+        // only send if enough data in the buffer
         if(this->payloadBufferFill > LORA_ACCUMULATE_THRESHOLD){
             return this->payloadBufferFill;
         }
@@ -847,4 +855,6 @@ void NodeManager::updateStatusMessage(uint16_t ctr, bool rescan){
         DEBUG.print(F("Status message: "));
         DEBUG.printHexBuf(this->statusMessage, this->statusMessageSize);
     }
+
+    this->sendStatusMessage = true;
 }

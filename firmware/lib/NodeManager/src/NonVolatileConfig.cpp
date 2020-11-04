@@ -383,7 +383,7 @@ int NonVolatileConfig::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_
 }
 
 int NonVolatileConfig::getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field, uint8_t metric){
-    int baseOffset = 1;
+    int baseOffset = SENSOR_CONFIG_START_OFFSET;
     int fieldOffset;
 
     uint8_t msb, lsb;

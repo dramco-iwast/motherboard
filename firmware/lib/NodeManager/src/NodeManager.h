@@ -35,7 +35,7 @@
 // Note: once anything is received over the serial configuration interface,
 // the motherboard will remain in configuration mode until the AT+CLS command
 // is received.
-#define CONFIG_DURATION_MS              15000
+#define CONFIG_DURATION_MS              20000
 
 // Maximum number of sensors that is being supported
 #define MAX_NR_OF_SENSORS               6

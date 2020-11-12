@@ -124,6 +124,8 @@ public:
     uint8_t getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize);
     bool dataAccumulationEnabled(void);
 
+    bool watchdogReset(void);
+
 private:
     void processAtCommands(void);
     void configureSensors(void);

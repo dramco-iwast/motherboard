@@ -21,14 +21,8 @@ void setup(){
   // TODO: check effect on power consumption
   // TODO: check if this helps to improve application robustness
   bool skipConfig = false;
-  if(Watchdog.resetCause() & PM_RCAUSE_WDT){
-    DEBUG.println(F("Watchdog reset -> skipping config."));
-    
-    Wire.end(); // needed?
+  if(nm.watchdogReset()){
     skipConfig = true;
-    
-    // TODO: remove, because only for testing
-    while(1);
   };
 
   // USB Serial for configuration
@@ -67,6 +61,7 @@ void loop() {
 
       // send the data
       lora.wake();
+      Watchdog.reset();
       lora.sendData(buf, pSize);
       lora.sleep();
     }

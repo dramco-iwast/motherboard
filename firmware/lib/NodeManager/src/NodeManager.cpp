@@ -381,7 +381,24 @@ void NodeManager::loop(void){
     Watchdog.reset();
 }
 
+bool NodeManager::watchdogReset(void){
+    if(Watchdog.resetCause() & PM_RCAUSE_WDT){
+        DEBUG.println(F("Watchdog reset happend."));
+        Wire.end(); // needed? and should it be here?
+        return true;
+    }
+    return false;
+}
+
 void NodeManager::sleep(void){
+    bool interruptsHandled = false;
+    // Handle pending interrupts first
+    if(this->dataAvailable()){
+        // get data and add to payload
+        this->getSensorData();
+        interruptsHandled = true;
+    }
+
     // update sleep-time remaining
     // if we got woken up by an sensor interrupt before the sleep time expires we need to keep sleeping
     int timeSinceLastRtcWakeup = (int)(LowPower.getRtcTime() - this->lastRtcWakeup);
@@ -397,21 +414,40 @@ void NodeManager::sleep(void){
     DEBUG.println(F("Watchdog disabled."));
     Watchdog.disable();
 
-    if((timeSinceLastRtcWakeup > 0) && (timeSinceLastRtcWakeup < POLL_WAKEUP_INTERVAL)){
-        // Sleep until previously set alarm
-        DEBUG.println(F("Back to sleep"));
-        DEBUG.flush();
-        LowPower.sleep();
-    }
-    else{
+    int sleepFor = POLL_WAKEUP_INTERVAL;
+    if(interruptsHandled){
+        sleepFor -= timeSinceLastRtcWakeup;
+
         // Set new RTC alarm and go to sleep
         DEBUG.print(F("Sleep for "));
-        DEBUG.print(POLL_WAKEUP_INTERVAL);
+        DEBUG.print(sleepFor);
         DEBUG.println(F(" s."));
         DEBUG.flush();
 
         // Enter standby mode
-        LowPower.sleep((POLL_WAKEUP_INTERVAL-1)*1000);
+        LowPower.sleep((sleepFor-1)*1000);
+    }
+    else{
+        if((timeSinceLastRtcWakeup > 0) && (timeSinceLastRtcWakeup < POLL_WAKEUP_INTERVAL)){
+            // Sleep until previously set alarm
+            DEBUG.println(F("Back to sleep"));
+            DEBUG.flush();
+            LowPower.sleep();
+        }
+        else{
+            if(timeSinceLastRtcWakeup > POLL_WAKEUP_INTERVAL){
+                DEBUG.print(F("Something went wrong, best not to nap for to long."));
+                sleepFor = 1;
+            }
+            // Set new RTC alarm and go to sleep
+            DEBUG.print(F("Sleep for "));
+            DEBUG.print(sleepFor);
+            DEBUG.println(F(" s."));
+            DEBUG.flush();
+
+            // Enter standby mode
+            LowPower.sleep((sleepFor-1)*1000);
+        }
     }
 
 }

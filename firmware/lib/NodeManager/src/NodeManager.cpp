@@ -391,12 +391,17 @@ bool NodeManager::watchdogReset(void){
 }
 
 void NodeManager::sleep(void){
-    bool interruptsHandled = false;
+    bool eventHandled = false;
     // Handle pending interrupts first
     if(this->dataAvailable()){
         // get data and add to payload
         this->getSensorData();
-        interruptsHandled = true;
+        eventHandled = true;
+    }
+
+    // 
+    if(this->statusTimer == 0){
+        eventHandled = true;
     }
 
     // update sleep-time remaining
@@ -415,7 +420,7 @@ void NodeManager::sleep(void){
     Watchdog.disable();
 
     int sleepFor = POLL_WAKEUP_INTERVAL;
-    if(interruptsHandled){
+    if(eventHandled){
         sleepFor -= timeSinceLastRtcWakeup;
 
         // Set new RTC alarm and go to sleep

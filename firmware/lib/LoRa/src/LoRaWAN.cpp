@@ -36,6 +36,7 @@ void LoRaWAN::begin(LoRaSettings_t s){
     // copy settings
     this->settings.activationMethod = s.activationMethod;
     this->settings.dataRate = s.dataRate;
+    this->settings.enableADR = s.enableADR;
     memcpy(this->settings.deviceAddress, s.deviceAddress, LORA_DEVICE_ADDRESS_LENGTH);
     this->settings.deviceAddress[LORA_DEVICE_ADDRESS_LENGTH] = '\0';
     memcpy(this->settings.deviceEUI, s.deviceEUI, LORA_EUI_LENGTH);
@@ -78,6 +79,8 @@ void LoRaWAN::begin(LoRaSettings_t s){
     DEBUG.println(this->modem->sysver());
 
     this->modem->setFrequencyPlan(TTN_EU);
+    this->modem->setDR(this->settings.dataRate);
+    this->modem->setAdaptiveDataRate(this->settings.enableADR);
 }
 
 /* Join a LoRaWAN network (ABP only)

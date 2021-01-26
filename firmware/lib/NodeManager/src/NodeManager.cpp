@@ -343,7 +343,7 @@ void NodeManager::runConfigMode(bool skip){
 void NodeManager::loop(void){
     // we are awake
     Watchdog.reset();
-    Watchdog.enable(5000);
+    Watchdog.enable(10000);
 
     // stuff to do on rtc wake-up
     if(rtcWakeUp){
@@ -416,8 +416,9 @@ void NodeManager::sleep(void){
     DEBUG.print(timeSinceLastRtcWakeup);
     DEBUG.println(F(" s."));
 
-    DEBUG.println(F("Watchdog disabled."));
-    Watchdog.disable();
+    DEBUG.println(F("Watchdog will fire in 16 s."));
+    Watchdog.reset();
+    Watchdog.enable(16000);
 
     int sleepFor = POLL_WAKEUP_INTERVAL;
     if(eventHandled){

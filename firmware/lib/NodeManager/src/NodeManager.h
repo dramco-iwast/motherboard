@@ -49,8 +49,10 @@
 #define SENSOR_SCAN_END_ADDRESS         0x7F
 
 // Timing settings
-#define POLL_WAKEUP_INTERVAL            60 // every 60 seconds (1 minute)
-//#define POLL_WAKEUP_INTERVAL            10 //
+#define POLL_WAKEUP_INTERVAL            15 // every 15 seconds
+#if POLL_WAKEUP_INTERVAL > 15
+#error "Setting a POLL_WAKEUP_INTERVAL of more than 15 seconds will break operation."
+#endif
 #define STATUS_MESSAGE_INTERVAL         21600 / POLL_WAKEUP_INTERVAL // every 21600 seconds (6 hours)
 //#define STATUS_MESSAGE_INTERVAL         30 / POLL_WAKEUP_INTERVAL
 

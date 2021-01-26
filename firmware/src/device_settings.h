@@ -51,8 +51,8 @@
  *
  * Try changing the SF to see its impact on the energy consumption
  */
-#define DEFAULT_DATA_RATE			SF9_BW125
-
+#define DEFAULT_DATA_RATE			SF11_BW125
+#define ENABLE_ADR					true
 
 #if OVER_THE_AIR_ACTIVATION == 1
 // Copy your settings here
@@ -91,6 +91,7 @@
 #define LORA_INIT_MY_DEVICE                                         \
 {	JOIN_MECHANISM,						/* Activation mechanism */	\
 	DEFAULT_DATA_RATE,					/* Data Rate on start-up */ \
+	ENABLE_ADR,							/* Use ADR or not (bool) */ \
 	LORAWAN_DEVICE_EUI,					/* Device EUI */            \
 	LORAWAN_APPLICATION_EUI,			/* Application EUI */       \
 	LORAWAN_APPLICATION_KEY,			/* Application key */       \
@@ -102,6 +103,7 @@
 #define LORA_INIT_MY_DEVICE                                         \
 {	JOIN_MECHANISM,						/* Activation mechanism */	\
 	DEFAULT_DATA_RATE,					/* Data Rate on start-up */ \
+	ENABLE_ADR,							/* Use ADR or not (bool) */ \
 	"",                 				/* Device EUI */            \
 	"",                					/* Application EUI */       \
 	"",									/* Application key */       \

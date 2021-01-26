@@ -261,6 +261,8 @@ class rn2xx3
 
     //bool wake(void);
 
+    bool setAdaptiveDataRate(bool enabled);
+
   private:
     Stream& _serial;
 
@@ -339,7 +341,6 @@ class rn2xx3
     bool setChannelEnabled(unsigned int channel, bool enabled);
     
     bool set2ndRecvWindow(unsigned int dataRate, uint32_t frequency);
-    bool setAdaptiveDataRate(bool enabled);
     bool setAutomaticReply(bool enabled);
     bool setTXoutputPower(int pwridx);
 

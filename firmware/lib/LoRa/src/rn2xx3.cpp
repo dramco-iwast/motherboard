@@ -225,7 +225,7 @@ bool rn2xx3::initOTAA(const String& AppEUI, const String& AppKey, const String& 
   // TTN does not yet support Adaptive Data Rate.
   // Using it is also only necessary in limited situations.
   // Therefore disable it by default.
-  setAdaptiveDataRate(false);
+  //setAdaptiveDataRate(false);
 
   // Switch off automatic replies, because this library can not
   // handle more than one mac_rx per tx. See RN2483 datasheet,
@@ -335,7 +335,7 @@ bool rn2xx3::initABP(const String& devAddr, const String& AppSKey, const String&
   sendMacSet(F("nwkskey"), _nwkskey);
   sendMacSet(F("appskey"), _appskey);
   sendMacSet(F("devaddr"), _devAddr);
-  setAdaptiveDataRate(false);
+  //setAdaptiveDataRate(false);
 
   // Switch off automatic replies, because this library can not
   // handle more than one mac_rx per tx. See RN2483 datasheet,

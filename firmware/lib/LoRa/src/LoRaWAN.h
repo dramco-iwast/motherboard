@@ -60,6 +60,7 @@ typedef enum data_rates{
 typedef struct{
 	LoRaActivationMethod_t activationMethod;
 	LoRaDataRate_t dataRate;
+	bool enableADR;
 	char deviceEUI[LORA_EUI_LENGTH+1];
 	char applicationEUI[LORA_EUI_LENGTH+1];
 	char applicationKey[LORA_KEY_LENGTH+1];

@@ -484,12 +484,15 @@ uint8_t NodeManager::getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize){
     return bytesToCopy;
 }
 
-uint8_t NodeManager::payloadAvailable(void){
+uint8_t NodeManager::payloadAvailable(bool * isStatus){
     // if the payload buffer contains a status message -> send regardless of data accumulation
     if(this->sendStatusMessage){
         this->sendStatusMessage = false;
+        *isStatus = true;
         return this->payloadBufferFill;
     }
+
+    *isStatus = false;
 
     // only data (and data accumulation is enabled)
     if(this->doDataAccumulation){

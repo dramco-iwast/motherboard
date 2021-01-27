@@ -115,7 +115,7 @@ class rn2xx3
      * NwkSKey: Network Session Key as a HEX string.
      *          Example "AE17E567AECC8787F749A62F5541D522"
      */
-    bool initABP(const String& addr, const String& AppSKey, const String& NwkSKey);
+    bool initABP(const String& addr, const String& AppSKey, const String& NwkSKey, int dr, bool enableADR);
 
     //TODO: initABP(uint8_t * addr, uint8_t * AppSKey, uint8_t * NwkSKey)
 
@@ -161,7 +161,7 @@ class rn2xx3
      * This method expects a raw byte array as first parameter.
      * The second parameter is the count of the bytes to send.
      */
-    TX_RETURN_TYPE txBytes(const byte*, uint8_t);
+    TX_RETURN_TYPE txBytes(const byte*, uint8_t, bool);
 
     /*
      * Do a confirmed transmission via LoRa WAN.

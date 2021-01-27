@@ -87,7 +87,7 @@ class LoRaWAN{
 		 * No resends on FAIL
 		 * Only unconfirmed messages
 		 */
-		void sendData(uint8_t * packet, uint8_t size);
+		void sendData(uint8_t * packet, uint8_t size, bool cnfMsg);
 
 		/* Put modem (hardware) in sleep to reduce power consumption
 		 * The duration is now 1 week, but we assume a forced wake-up within that period

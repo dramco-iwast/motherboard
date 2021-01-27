@@ -50,7 +50,8 @@ void loop() {
   nm.loop();
 
   // we are awake -> check for data to send
-  uint8_t pSize = nm.payloadAvailable();
+  bool isStatus;
+  uint8_t pSize = nm.payloadAvailable(&isStatus);
   if(pSize > 0){
     DEBUG.println("\nMAIN APP: Data available!");
     DEBUG.print(pSize);
@@ -59,10 +60,16 @@ void loop() {
       DEBUG.print("Payload: ");
       DEBUG.printHexBuf(buf, pSize);
 
+      // status messages are sent every 6 hours (4 / day) as a confirmed message
+      // this allows for data rate adjustments by the ADR mechanism
+      if(isStatus){
+        DEBUG.println("Includes status -> confirmed message.");
+      }
+
       // send the data
       lora.wake();
       Watchdog.reset();
-      lora.sendData(buf, pSize);
+      lora.sendData(buf, pSize, isStatus);
       lora.sleep();
     }
     else{

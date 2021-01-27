@@ -95,7 +95,7 @@ void LoRaWAN::join(void){
     String AppSKey = String(this->settings.applicationSessionKey);
     String NwkSKey = String(this->settings.networkSessionKey);
 
-    join_result = this->modem->initABP(addr, AppSKey, NwkSKey);
+    join_result = this->modem->initABP(addr, AppSKey, NwkSKey, (int) this->settings.dataRate, this->settings.enableADR);
 
     while(!join_result){
         DEBUG.println("Unable to join. Are your keys correct, and do you have TTN coverage?");
@@ -104,7 +104,8 @@ void LoRaWAN::join(void){
     }
 
     // change data rate here (set to SF7 in initABP)
-    this->modem->setDR(this->settings.dataRate);
+    //this->modem->setDR(this->settings.dataRate);
+    //this->modem->setAdaptiveDataRate(this->settings.enableADR);
     DEBUG.println("Successfully joined TTN");
     // "lora communication indicator" led off
     digitalWrite(LORA_LED, HIGH);
@@ -114,12 +115,12 @@ void LoRaWAN::join(void){
  * No resends on FAIL
  * Only unconfirmed messages
  */
-void LoRaWAN::sendData(uint8_t * packet, uint8_t size){
+void LoRaWAN::sendData(uint8_t * packet, uint8_t size, bool cnfMsg){
     // "lora communication indicator" led on
     digitalWrite(LORA_LED, LOW);
 
-    // transmit "raw bytes" (unconfirmed)
-    TX_RETURN_TYPE rv = this->modem->txBytes(packet, size);
+    //
+    TX_RETURN_TYPE rv = this->modem->txBytes(packet, size, cnfMsg);
 #ifdef SERIAL_DEBUG_OUTPUT
     switch (rv){
         case TX_FAIL:{

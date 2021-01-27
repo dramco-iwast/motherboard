@@ -149,7 +149,7 @@ bool rn2xx3::init()
   }
   else
   {
-    return initABP(_devAddr, _appskey, _nwkskey);
+    return initABP(_devAddr, _appskey, _nwkskey, 5, false);
   }
 }
 
@@ -303,7 +303,7 @@ bool rn2xx3::initOTAA(uint8_t * AppEUI, uint8_t * AppKey, uint8_t * DevEUI)
   return initOTAA(app_eui, app_key, dev_eui);
 }
 
-bool rn2xx3::initABP(const String& devAddr, const String& AppSKey, const String& NwkSKey)
+bool rn2xx3::initABP(const String& devAddr, const String& AppSKey, const String& NwkSKey, int dr, bool enableADR)
 {
   _otaa = false;
   _devAddr = devAddr;
@@ -335,7 +335,7 @@ bool rn2xx3::initABP(const String& devAddr, const String& AppSKey, const String&
   sendMacSet(F("nwkskey"), _nwkskey);
   sendMacSet(F("appskey"), _appskey);
   sendMacSet(F("devaddr"), _devAddr);
-  //setAdaptiveDataRate(false);
+  setAdaptiveDataRate(enableADR);
 
   // Switch off automatic replies, because this library can not
   // handle more than one mac_rx per tx. See RN2483 datasheet,
@@ -350,7 +350,7 @@ bool rn2xx3::initABP(const String& devAddr, const String& AppSKey, const String&
   {
     setTXoutputPower(1);
   }
-  sendMacSet(F("dr"), String(5)); //0= min, 7=max
+  sendMacSet(F("dr"), String(dr)); //0= min, 7=max
 
   _serial.setTimeout(60000);
   sendRawCommand(F("mac save"));
@@ -376,7 +376,7 @@ TX_RETURN_TYPE rn2xx3::tx(const String& data)
   return txUncnf(data); //we are unsure which mode we're in. Better not to wait for acks.
 }
 
-TX_RETURN_TYPE rn2xx3::txBytes(const byte* data, uint8_t size)
+TX_RETURN_TYPE rn2xx3::txBytes(const byte* data, uint8_t size, bool cnfMsg)
 {
   char msgBuffer[size*2 + 1];
 
@@ -387,7 +387,12 @@ TX_RETURN_TYPE rn2xx3::txBytes(const byte* data, uint8_t size)
     memcpy(&msgBuffer[i*2], &buffer, sizeof(buffer));
   }
   String dataToTx(msgBuffer);
-  return txCommand("mac tx uncnf 1 ", dataToTx, false);
+  if(cnfMsg){
+    return txCommand("mac tx cnf 1 ", dataToTx, false);
+  }
+  else{
+    return txCommand("mac tx uncnf 1 ", dataToTx, false);
+  }
 }
 
 TX_RETURN_TYPE rn2xx3::txCnf(const String& data)

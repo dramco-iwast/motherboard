@@ -122,7 +122,7 @@ public:
     // main operation
     void loop(void);
     void sleep(void);
-    uint8_t payloadAvailable(void); // return payload size
+    uint8_t payloadAvailable(bool * isStatus); // return payload size
     uint8_t getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize);
     bool dataAccumulationEnabled(void);
 

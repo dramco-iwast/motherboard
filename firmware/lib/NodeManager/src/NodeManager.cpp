@@ -159,17 +159,12 @@ void NodeManager::begin(void){
     // 1. Initialize interrupts pins
     for(uint8_t i=0; i<MAX_NR_OF_SENSORS; i++){
         pinMode(intPins[i], INPUT_PULLUP);
-        // assign dummy interrupt on rising edge
-        // this is necessary because otherwise, using the "Low-Power"-lib seems to result
-        // unhandled interrupts
-        //attachInterrupt(intPins[i], nullCb, RISING);
     }
 
     // 2. Initialize I2C bus
     delay(500);
     Wire.begin();
     Wire.setClock(100000);
-   // Wire.setTimeout(500);
 
     // 3. Build a sensor list (i.e. list of Sensor objects for interfacing with the sensor boards)
     uint8_t detectedSensors[MAX_NR_OF_SENSORS];
@@ -222,11 +217,7 @@ void NodeManager::begin(void){
                     this->sensorList[i].setIntPin(intPins[s]);
                     this->sensorList[i].setCbNr(s);
  
-                    // detach previously attached 'dummy' callback
-                    //detachInterrupt(this->sensorList[i].getIntPin());
-
                     // attach pin interrupt callback
-                    //attachInterrupt(this->sensorList[i].getIntPin(), sensorCallbacks[s], LOW);
                     LowPower.attachInterruptWakeup(this->sensorList[i].getIntPin(), sensorCallbacks[s], FALLING);
                 }
                 else{
@@ -249,42 +240,6 @@ void NodeManager::begin(void){
         delay(20);
     }
 
-    // 4. Read a previous configuration from EEPROM
-    DEBUG.println(F("Reading previous config from EEPROM ..."));
-    this->nvConfig->readSensorConfig();
-    this->nvConfig->printSensorConfig();
-
-    // 5. Test if connected sensors (sensorList) match the previous configuration (nvConfig)
-    bool diffDetected = false;
-    if(this->nvConfig->getNrSensors() != this->nrSensors){
-        diffDetected = true;
-    }
-    else{
-        for(uint8_t i=0; i<this->nrSensors; i++){
-            if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getIicAddress(), this->sensorList[i].getSensorType())){
-                diffDetected = true;
-                break;
-            }
-        }
-    }
-    
-    // 6. If list of sensors from the previous configuration differs from the currently installed sensors
-    // we completely discard the previous configuration and build a new one based on the sensorList
-    if(diffDetected){
-        DEBUG.println(F("Connected sensors don't match with previous config."));
-        DEBUG.println(F("Creating new config ..."));
-        // discard old config
-        this->nvConfig->discardConfig();
-        // build new config (in RAM)
-        this->nvConfig->createNewConfig(this->nrSensors, this->sensorList);
-        DEBUG.println(F("Updating non volatile config:"));
-        this->nvConfig->storeSensorConfig();
-    }
-    else{
-        DEBUG.println(F("Connected sensors match with previous config."));
-    }
-    this->nvConfig->printSensorConfig();
-
     this->atStartTime = millis();
 
     DEBUG.println("Done\n");
@@ -295,10 +250,9 @@ void NodeManager::begin(void){
  * The default behaviour is to exit config mode when there is no serial communication within 
  * CONFIG_DURATION_MS. If there is, however, config mode can be exited by sending the "AT+CLS" command.
  */
-//void NodeManager::runConfigMode(bool forever){
-//    while(this->conFigMode || forever){
-
 void NodeManager::runConfigMode(bool skip){
+    bool firstCommandProcessed = false;
+    this->configUpdated = false;
     if(!skip){
         while(this->conFigMode){
             // disable at commands after 10000
@@ -309,34 +263,80 @@ void NodeManager::runConfigMode(bool skip){
             }
 
             // Run the configuration interface
-            this->processAtCommands();
+            if(this->processAtCommands()){
+                // on the first command that is received (normally this is AT+PNG?) populate the config
+                if(!firstCommandProcessed){
+                    firstCommandProcessed = true;
+                    // 1. Read a previous configuration from EEPROM
+                    DEBUG.println(F("Reading previous config from EEPROM ..."));
+                    this->nvConfig->readSensorConfig();
+                    this->nvConfig->printSensorConfig();
+
+                    // 2. Test if connected sensors (sensorList) match the previous configuration (nvConfig)
+                    bool diffDetected = false;
+                    if(this->nvConfig->getNrSensors() != this->nrSensors){
+                        diffDetected = true;
+                    }
+                    else{
+                        for(uint8_t i=0; i<this->nrSensors; i++){
+                            if(!this->nvConfig->sensorInConfig(i, this->sensorList[i].getIicAddress(), this->sensorList[i].getSensorType())){
+                                diffDetected = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 3. If list of sensors from the previous configuration differs from the currently installed sensors
+                    // we completely discard the previous configuration and build a new one based on the sensorList
+                    if(diffDetected){
+                        DEBUG.println(F("Connected sensors don't match with previous config."));
+                        DEBUG.println(F("Creating new config ..."));
+                        // discard old config
+                        this->nvConfig->discardConfig();
+                        // build new config (in RAM)
+                        this->nvConfig->createNewConfig(this->nrSensors, this->sensorList);
+                        DEBUG.println(F("Updating non volatile config:"));
+                        this->nvConfig->storeSensorConfig();
+                    }
+                    else{
+                        DEBUG.println(F("Connected sensors match with previous config."));
+                    }
+                    this->nvConfig->printSensorConfig();
+                }
+            }
         }
     }
 
     // We have exited configuration mode
     // Next step is to store config settings, clean up and start normal operation.
-    
-    DEBUG.println("Disconnecting USB ...");
+    DEBUG.println(F("Disconnecting USB ..."));
     SerialAT.end();
     delay(1000);
 	USBDevice.detach();
     USBDevice.end();
 
-    DEBUG.println("Configuring connected sensors ...");
-    this->configureSensors();
+    if(this->configUpdated){
+        DEBUG.println(F("Using configuration:"));
+        this->nvConfig->storeSensorConfig();
+    }
+    else{
+        DEBUG.println(F("Reading previous config from EEPROM ..."));
+        this->nvConfig->readSensorConfig();
+        this->nvConfig->printSensorConfig();
+    }
 
-    DEBUG.println("Using configuration:");
-    this->nvConfig->storeSensorConfig();
+    DEBUG.println(F("Configuring connected sensors ..."));
+    this->configureSensors();
     this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
     delete this->nvConfig;
 
-    DEBUG.println("Attach RTC callback.");
+    DEBUG.println(F("Attach RTC callback."));
     LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
 
-    DEBUG.println("Updating status message.");
+    DEBUG.println(F("Updating status message."));
     this->initStatusMessage();
 
-    DEBUG.println("Exit config mode.");
+    DEBUG.println(F("Exit config mode."));
     delay(10);
 }
 
@@ -586,7 +586,8 @@ bool NodeManager::copyToPayloadBuffer(uint8_t * buffer, uint8_t bufferSize){
     return true;
 }
 
-void NodeManager::processAtCommands(void){
+bool NodeManager::processAtCommands(void){
+    bool commandProcessed = false;
     // receive characters
     while(SerialAT.available()) {
         // get the new byte:
@@ -604,7 +605,6 @@ void NodeManager::processAtCommands(void){
 
     // process command buffer
     if(this->commandReceived) {
-        bool commandProcessed = false;
         AT_ErrorCodes_t errorCode = AT_UNDEFINED_ERROR;
         // check for at command
         if(strstr(this->atCommand, "AT+")){
@@ -615,6 +615,7 @@ void NodeManager::processAtCommands(void){
                 SerialAT.println("OK");
                 commandProcessed = true;
                 this->conFigMode = false;
+                this->configUpdated = true;
             }
 
             // Ping motherboard
@@ -845,6 +846,7 @@ void NodeManager::processAtCommands(void){
         this->atFill = 0;
         this->commandReceived = false;
     }
+    return commandProcessed;
 }
 
 void NodeManager::configureSensors(void){
@@ -857,12 +859,14 @@ void NodeManager::configureSensors(void){
             uint8_t enabled;
             uint16_t tll;
             uint16_t tlh;
-            this->nvConfig->getSensorThresholdSettings(i, j, &enabled, &tll, &tlh);
-            this->sensorList[i].setThresholds(j, enabled, tll, tlh);
+            if(this->nvConfig->getSensorThresholdSettings(i, j, &enabled, &tll, &tlh)){
+                this->sensorList[i].setThresholds(j, enabled, tll, tlh);
+            }
             // set poll interval
             uint16_t poll;
-            this->nvConfig->getSensorPollInterval(i, j, &poll);
-            this->sensorList[i].setPollInterval(j, poll);
+            if(this->nvConfig->getSensorPollInterval(i, j, &poll)){
+                this->sensorList[i].setPollInterval(j, poll);
+            }
             DEBUG.print("metric ");
             DEBUG.print(j);
             DEBUG.print(" - ");

@@ -39,10 +39,9 @@ void setup(){
   lora.sleep(); // saves approx. 2.5 mA
 
   // start the node manager
-  // by now, all connected sensors should be initialized
   nm.begin();
+  // if skipConfig is true, sensors will be configured with a previously stored configuration
   nm.runConfigMode(skipConfig); // run config
-  //nm.runConfigMode(true); // run config forever
 }
 
 void loop() {

@@ -129,7 +129,7 @@ public:
     bool watchdogReset(void);
 
 private:
-    void processAtCommands(void);
+    bool processAtCommands(void);
     void configureSensors(void);
     bool dataAvailable(void);
     void getSensorData(void);
@@ -152,6 +152,7 @@ private:
     char atCommand[AT_COMMAND_MAX_SIZE];     // a String to hold incoming data
     uint8_t atFill;
     bool commandReceived;   // whether the string is complete
+    bool configUpdated;
 
     unsigned long atStartTime;
     bool conFigMode;

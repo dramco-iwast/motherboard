@@ -130,7 +130,7 @@ public:
 
 private:
     bool processAtCommands(void);
-    void configureSensors(void);
+    bool configureSensors(void);
     bool dataAvailable(void);
     void getSensorData(void);
 

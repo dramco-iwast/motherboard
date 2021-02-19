@@ -326,7 +326,12 @@ void NodeManager::runConfigMode(bool skip){
     }
 
     DEBUG.println(F("Configuring connected sensors ..."));
-    this->configureSensors();
+    if(!this->configureSensors()){
+        DEBUG.println("CONFIG MISMATCH - SYSTEM RESET");
+        DEBUG.flush();
+        Watchdog.enable(10);
+        delay(100); // watchdog reset will occur here
+    }
     this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
     delete this->nvConfig;
 
@@ -849,10 +854,23 @@ bool NodeManager::processAtCommands(void){
     return commandProcessed;
 }
 
-void NodeManager::configureSensors(void){
+// configure sensor will return false if connected sensors don't match the nvConfig
+bool NodeManager::configureSensors(void){
+    if(this->nrSensors == 0){
+        return false;
+    }
     for(uint8_t i=0; i<this->nrSensors; i++){
         DEBUG.print("Sensor ");
         DEBUG.println(i);
+        // first check if iic address matches
+        uint8_t iic = 0;
+        if(!this->nvConfig->getSensorI2CAddress(i, &iic)){
+            return false;
+        }
+        if(this->sensorList[i].getIicAddress() != iic){
+            return false;
+        }
+        // connected sensor matches with nvConfig so we can proceed
         // for each sensor metric
         for(uint8_t j=0; j<this->sensorList[i].getNrMetrics(); j++){
             // set thresholds
@@ -880,6 +898,7 @@ void NodeManager::configureSensors(void){
             delay(10);
         }
     }
+    return true;
 }
 
 bool NodeManager::dataAvailable(void){

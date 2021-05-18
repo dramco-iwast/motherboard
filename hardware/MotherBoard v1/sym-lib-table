@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name MotherBoard-rescue)(type Legacy)(uri ${KIPRJMOD}/MotherBoard-rescue.lib)(options "")(descr ""))
+)

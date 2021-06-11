@@ -61,14 +61,14 @@ void loop() {
 
       // status messages are sent every 6 hours (4 / day) as a confirmed message
       // this allows for data rate adjustments by the ADR mechanism
-      if(isStatus){
+      if(isStatus && CONFIRMED_MESSAGES_ALLOWED){
         DEBUG.println("Includes status -> confirmed message.");
       }
 
       // send the data
       lora.wake();
       Watchdog.reset();
-      lora.sendData(buf, pSize, isStatus);
+      lora.sendData(buf, pSize, (isStatus && CONFIRMED_MESSAGES_ALLOWED));
       lora.sleep();
     }
     else{

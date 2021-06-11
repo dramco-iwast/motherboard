@@ -53,6 +53,7 @@
  */
 #define DEFAULT_DATA_RATE			SF11_BW125
 #define ENABLE_ADR					true
+#define CONFIRMED_MESSAGES_ALLOWED  true
 
 #if OVER_THE_AIR_ACTIVATION == 1
 // Copy your settings here
@@ -91,7 +92,7 @@
 #define LORA_INIT_MY_DEVICE                                         \
 {	JOIN_MECHANISM,						/* Activation mechanism */	\
 	DEFAULT_DATA_RATE,					/* Data Rate on start-up */ \
-	ENABLE_ADR,							/* Use ADR or not (bool) */ \
+	(ENABLE_ADR && CONFIRMED_MESSAGES_ALLOWED),	/* Use ADR or not (bool) */ \
 	LORAWAN_DEVICE_EUI,					/* Device EUI */            \
 	LORAWAN_APPLICATION_EUI,			/* Application EUI */       \
 	LORAWAN_APPLICATION_KEY,			/* Application key */       \
@@ -103,7 +104,7 @@
 #define LORA_INIT_MY_DEVICE                                         \
 {	JOIN_MECHANISM,						/* Activation mechanism */	\
 	DEFAULT_DATA_RATE,					/* Data Rate on start-up */ \
-	ENABLE_ADR,							/* Use ADR or not (bool) */ \
+	(ENABLE_ADR && CONFIRMED_MESSAGES_ALLOWED),	/* Use ADR or not (bool) */ \
 	"",                 				/* Device EUI */            \
 	"",                					/* Application EUI */       \
 	"",									/* Application key */       \

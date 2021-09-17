@@ -32,7 +32,9 @@ LoRaWAN::LoRaWAN(void){
 /* Initialize LoRaWAN modem according to LoRaSettings_t s.
  * This will only intialize the hardware. No communication yet.
  */
-void LoRaWAN::begin(LoRaSettings_t s){
+void LoRaWAN::begin(LoRaSettings_t s, bool ledMode){
+    this->_ledMode = ledMode;
+
     // copy settings
     this->settings.activationMethod = s.activationMethod;
     this->settings.dataRate = s.dataRate;
@@ -53,7 +55,7 @@ void LoRaWAN::begin(LoRaSettings_t s){
     // configure "lora communication indicator" led pin to output
     pinMode(LORA_LED, OUTPUT);
     // "lora communication indicator" led off
-    digitalWrite(LORA_LED, HIGH);
+    this->ledOff();
 
     // currently, only ABP is supported, so check and block forever if OTAA is selected
     if(this->settings.activationMethod == OTAA){
@@ -88,7 +90,7 @@ void LoRaWAN::begin(LoRaSettings_t s){
  */
 void LoRaWAN::join(void){
     // "lora communication indicator" led on
-    ledOn();
+    this->ledOn();
     bool join_result;
 
     String addr = String(this->settings.deviceAddress);
@@ -108,7 +110,7 @@ void LoRaWAN::join(void){
     //this->modem->setAdaptiveDataRate(this->settings.enableADR);
     DEBUG.println("Successfully joined TTN");
     // "lora communication indicator" led off
-    ledOff();
+    this->ledOff();
 }
 
 /* Send "raw data" bytes (in "packet" with length "size") over the LoRaWAN network
@@ -117,7 +119,7 @@ void LoRaWAN::join(void){
  */
 void LoRaWAN::sendData(uint8_t * packet, uint8_t size, bool cnfMsg){
     // "lora communication indicator" led on
-    ledOn();
+    this->ledOn();
 
     //
     TX_RETURN_TYPE rv = this->modem->txBytes(packet, size, cnfMsg);
@@ -138,7 +140,7 @@ void LoRaWAN::sendData(uint8_t * packet, uint8_t size, bool cnfMsg){
 #endif
     
     // "lora communication indicator" led off
-    ledOff();
+    this->ledOff();
 }
 
 /* Put modem (hardware) in sleep to reduce power consumption
@@ -161,9 +163,9 @@ void LoRaWAN::wake(){
 }
 
 void LoRaWAN::ledOn(void){
-    digitalWrite(LORA_LED, HIGH);
+    digitalWrite(LORA_LED, this->_ledMode);
 }
 
 void LoRaWAN::ledOff(void){
-    digitalWrite(LORA_LED, LOW);
+    digitalWrite(LORA_LED, !this->_ledMode);
 }

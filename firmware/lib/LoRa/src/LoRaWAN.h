@@ -75,8 +75,9 @@ class LoRaWAN{
 
 		/* Initialize LoRaWAN modem according to LoRaSettings_t s.
 		 * This will only intialize the hardware. No communication yet.
+		 * ledMode - true = active high, false = active low
 		 */
-		void begin(LoRaSettings_t s);
+		void begin(LoRaSettings_t s, bool ledMode=true);
 
 		/* Join a LoRaWAN network (ABP only)
 		 * LoRaWAN::begin() needs to be called first.
@@ -105,6 +106,7 @@ class LoRaWAN{
 		LoRaSettings_t settings;
 
 		rn2xx3 * modem;
+		bool _ledMode;
 };
 
 extern LoRaWAN lora;

@@ -35,6 +35,11 @@ LoRaWAN::LoRaWAN(void){
 void LoRaWAN::begin(LoRaSettings_t s, bool ledMode){
     this->_ledMode = ledMode;
 
+    // configure "lora communication indicator" led pin to output
+    pinMode(LORA_LED, OUTPUT);
+    // "lora communication indicator" led off
+    this->ledOff();
+
     // copy settings
     this->settings.activationMethod = s.activationMethod;
     this->settings.dataRate = s.dataRate;
@@ -52,19 +57,14 @@ void LoRaWAN::begin(LoRaSettings_t s, bool ledMode){
     memcpy(this->settings.applicationSessionKey, s.applicationSessionKey, LORA_KEY_LENGTH);
     this->settings.applicationSessionKey[LORA_KEY_LENGTH] = '\0';
 
-    // configure "lora communication indicator" led pin to output
-    pinMode(LORA_LED, OUTPUT);
-    // "lora communication indicator" led off
-    this->ledOff();
-
     // currently, only ABP is supported, so check and block forever if OTAA is selected
-    if(this->settings.activationMethod == OTAA){
+    /*if(this->settings.activationMethod == OTAA){
         DEBUG.println("OTAA is not supported!");
         while(1){
             digitalWrite(LORA_LED, !digitalRead(LORA_LED));
             delay(500);
         }
-    }
+    }*/
 
     // initialize serial port for communication with rn2483
     SerialRN.begin(RN2483_BAUD);
@@ -75,17 +75,15 @@ void LoRaWAN::begin(LoRaSettings_t s, bool ledMode){
     // hard reset (using rn2483 reset pin)
     this->modem->reset();
     delay(100); //wait for the RN2xx3's startup message
-    SerialRN.flush();
 
-    DEBUG.println("RN2xx3 firmware version:");
-    DEBUG.println(this->modem->sysver());
+    if(SerialRN.available()) SerialRN.flush();
 
     this->modem->setFrequencyPlan(TTN_EU);
     this->modem->setDR(this->settings.dataRate);
     this->modem->setAdaptiveDataRate(this->settings.enableADR);
 }
 
-/* Join a LoRaWAN network (ABP only)
+/* Join a LoRaWAN network
  * LoRaWAN::begin() needs to be called first.
  */
 void LoRaWAN::join(void){
@@ -93,14 +91,33 @@ void LoRaWAN::join(void){
     this->ledOn();
     bool join_result;
 
-    String addr = String(this->settings.deviceAddress);
-    String AppSKey = String(this->settings.applicationSessionKey);
-    String NwkSKey = String(this->settings.networkSessionKey);
+    if(this->settings.activationMethod == OTAA){
+        String devEUI = String(this->settings.deviceEUI);
+        String appEUI = String(this->settings.applicationEUI);
+        String appKey = String(this->settings.applicationKey);
 
-    join_result = this->modem->initABP(addr, AppSKey, NwkSKey, (int) this->settings.dataRate, this->settings.enableADR);
+        join_result = this->modem->initOTAA(appEUI, appKey, devEUI, (int) this->settings.dataRate, this->settings.enableADR);
+    }
+    else{
+        String addr = String(this->settings.deviceAddress);
+        String AppSKey = String(this->settings.applicationSessionKey);
+        String NwkSKey = String(this->settings.networkSessionKey);
+
+        join_result = this->modem->initABP(addr, AppSKey, NwkSKey, (int) this->settings.dataRate, this->settings.enableADR);
+    }
+
 
     while(!join_result){
         DEBUG.println("Unable to join. Are your keys correct, and do you have TTN coverage?");
+        this->ledOff();
+        delay(1000);
+        this->ledOn();
+        delay(1000);
+        this->ledOff();
+        delay(1000);
+        this->ledOn();
+        delay(1000);
+        this->ledOff();
         delay(60000); //delay a minute before retry
         join_result = this->modem->init();
     }

@@ -27,6 +27,14 @@
 
 #include <Arduino.h>
 #include "Sensor.h"
+#include "device_settings.h"
+
+typedef struct nvLoraSettings{
+    uint8_t dataAccumulation;
+    uint8_t adrOn;
+    char devEUI[EUI_LENGTH+1];
+    char appKey[KEY_LENGTH+1];
+} NvLoraSettings_t;
 
 typedef struct metricSettings{
     uint16_t pollInterval;
@@ -66,6 +74,18 @@ public:
     // set/get accumulation
     uint8_t getDataAccumulation(void);
     void setDataAccumulation(uint8_t yesNo);
+
+    // get/set ADR
+    uint8_t getADR(void);
+    void setADR(uint8_t adrOn);
+
+    // get/set Dev. EUI
+    void getDevEUI(char * eui);
+    void setDevEUI(char eui[EUI_LENGTH+1]);
+
+    // get/set Application Key
+    void getAppKey(char * key);
+    void setAppKey(char key[KEY_LENGTH+1]);
 
     // get number of sensors in the configuration
     uint8_t getNrSensors(void);
@@ -109,6 +129,10 @@ public:
     void printSensorConfig(void);
 
 private:
+    // store lora settings
+    bool storeLoraSettings(void);
+    bool readLoraSettings(void);
+
     // store configuration of a single sensor
     bool storeSensorConfig(int offset, SensorConfig_t config, int * bytesStored);
 
@@ -121,7 +145,7 @@ private:
     int getConfigFieldOffset(uint8_t sensorId, SensorConfigField_t field);
     
     uint8_t nrSensors;
-    uint8_t dataAccumulation;
+    NvLoraSettings_t loraSettings;
     SensorConfig_t * sensorConfigSettings;
 };
 

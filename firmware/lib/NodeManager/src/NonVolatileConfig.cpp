@@ -27,24 +27,34 @@
 #include "DebugSerial.h"
 
 // Non-Volatile storage offsets
-#define NR_SENSORS_OFFSET               0
-#define DATA_ACCUMULATION_OFFSET        1
-#define SENSOR_CONFIG_START_OFFSET      2
-#define SENSOR_CONFIG_I2C_OFFSET        2
-#define SENSOR_CONFIG_TYPE_OFFSET       3
-#define SENSOR_CONFIG_NRSET_OFFSET      4
-#define SENSOR_CONFIG_HEADER_SIZE       5
-#define SENSOR_CONFIG_POL_OFFSET        (SENSOR_CONFIG_HEADER_SIZE)
-#define SENSOR_CONFIG_TE_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+2)
-#define SENSOR_CONFIG_TL_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+3)
-#define SENSOR_CONFIG_TH_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+5)
-#define SENSOR_CONFIG_SETTTINGS_SIZE    7
+#define NR_SENSORS_OFFSET                   0
+#define LORA_SETTINGS_OFFSET                1
+#define LORA_SETTINGS_SIZE              50
+// following offsets are relative to lora settings offset
+    // first byte is DATA_ACCUMULATION
+    #define ADR_ON_OFFSET                   1
+    #define UID_OFFSET                      2
+    #define APP_KEY_OFFSET                  19
+    
+#define SENSOR_CONFIG_START_OFFSET          (LORA_SETTINGS_OFFSET+LORA_SETTINGS_SIZE) // first to bytes point to next sensor config
+// following offsets are relative to sensor config start offset
+    // first to bytes point to next sensor config
+    #define SENSOR_CONFIG_I2C_OFFSET        2
+    #define SENSOR_CONFIG_TYPE_OFFSET       3
+    #define SENSOR_CONFIG_NRSET_OFFSET      4
+    #define SENSOR_CONFIG_HEADER_SIZE       5
+    #define SENSOR_CONFIG_POL_OFFSET        (SENSOR_CONFIG_HEADER_SIZE)
+    #define SENSOR_CONFIG_TE_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+2)
+    #define SENSOR_CONFIG_TL_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+3)
+    #define SENSOR_CONFIG_TH_OFFSET         (SENSOR_CONFIG_HEADER_SIZE+5)
+    #define SENSOR_CONFIG_SETTTINGS_SIZE    7
 
 
 NonVolatileConfig::NonVolatileConfig(void){
     this->sensorConfigSettings = NULL;
     this->nrSensors = 0;
-    this->dataAccumulation = 0;
+    this->loraSettings.dataAccumulation = 0;
+    this->loraSettings.adrOn = 0;
 }
 
 NonVolatileConfig::~NonVolatileConfig(){
@@ -56,11 +66,37 @@ uint8_t NonVolatileConfig::getNrSensors(void){
 }
 
 uint8_t NonVolatileConfig::getDataAccumulation(void){
-    return this->dataAccumulation;
+    return this->loraSettings.dataAccumulation;
 }
 
 void NonVolatileConfig::setDataAccumulation(uint8_t yesNo){
-    this->dataAccumulation = yesNo;
+    this->loraSettings.dataAccumulation = yesNo;
+}
+
+uint8_t NonVolatileConfig::getADR(void){
+    return this->loraSettings.adrOn;
+}
+
+void NonVolatileConfig::setADR(uint8_t adrOn){
+    this->loraSettings.adrOn = adrOn;
+}
+
+void NonVolatileConfig::getDevEUI(char * eui){
+    memcpy(eui, this->loraSettings.devEUI, EUI_LENGTH+1);
+}
+
+void NonVolatileConfig::setDevEUI(char eui[EUI_LENGTH+1]){
+    memcpy(this->loraSettings.devEUI, eui, EUI_LENGTH);
+    this->loraSettings.devEUI[EUI_LENGTH] = '\0';
+}
+
+void NonVolatileConfig::getAppKey(char * key){
+    memcpy(key, this->loraSettings.appKey, KEY_LENGTH+1);
+}
+
+void NonVolatileConfig::setAppKey(char key[KEY_LENGTH+1]){
+    memcpy(this->loraSettings.appKey, key, KEY_LENGTH);
+    this->loraSettings.appKey[KEY_LENGTH] = '\0';
 }
 
 bool NonVolatileConfig::sensorInConfig(uint8_t ind, uint8_t i2c, uint8_t type){
@@ -231,7 +267,8 @@ bool NonVolatileConfig::storeSensorConfigField(uint8_t sensorId, uint8_t metric,
 // store complete sensor configuration / will overwrite existing configs
 void NonVolatileConfig::storeSensorConfig(void){
     EEPROM.write(NR_SENSORS_OFFSET, nrSensors);
-    EEPROM.write(DATA_ACCUMULATION_OFFSET, dataAccumulation);
+
+    this->storeLoraSettings();
 
     int offset = SENSOR_CONFIG_START_OFFSET;
     int bytesStored = 0;
@@ -245,14 +282,34 @@ void NonVolatileConfig::storeSensorConfig(void){
 }
 
 void NonVolatileConfig::printSensorConfig(void){
-    DEBUG.print("Data accumulation: ");
-    if(this->dataAccumulation){
-        DEBUG.println("yes.");
+    DEBUG.println(F("Lora settings:"));
+    DEBUG.print(F("Dev. EUI: 0x"));
+    for(uint8_t i=0; i<EUI_LENGTH; i++){
+        DEBUG.print(this->loraSettings.devEUI[i]);
+    }
+    DEBUG.println();
+
+    DEBUG.print(F(" - data accumultation: "));
+    if(this->loraSettings.dataAccumulation){
+        DEBUG.println("yes");
     }
     else{
-        DEBUG.println("no.");
+        DEBUG.println("no");
     }
-    DEBUG.print("Nr sensors: ");
+    DEBUG.print(F(" - ADR "));
+    if(this->loraSettings.adrOn){
+        DEBUG.println("ON");
+    }
+    else{
+        DEBUG.println("OFF");
+    }
+    DEBUG.print(F(" - App. Key: 0x"));
+    for(uint8_t i=0; i<KEY_LENGTH; i++){
+        DEBUG.print(this->loraSettings.appKey[i]);
+    }
+    DEBUG.println();
+
+    DEBUG.print(F("Nr sensors: "));
     DEBUG.println(this->nrSensors);
 
     for(int i=0; i<nrSensors; i++){
@@ -289,6 +346,7 @@ bool NonVolatileConfig::storeSensorConfig(int offset, SensorConfig_t config, int
     int space_needed = SENSOR_CONFIG_HEADER_SIZE + SENSOR_CONFIG_SETTTINGS_SIZE*config.nrMetrics;
     if(space_needed + offset > EEPROM.length()){
         return false;
+        DEBUG.println(F("Non volatile storage is full."));
     }
 
     int size = 2;
@@ -434,7 +492,7 @@ bool NonVolatileConfig::readSensorConfig(void){
     }
 
     this->nrSensors = EEPROM.read(NR_SENSORS_OFFSET);
-    this->dataAccumulation = EEPROM.read(DATA_ACCUMULATION_OFFSET);
+    this->readLoraSettings();
 
     this->sensorConfigSettings = (SensorConfig_t *) malloc(sizeof(SensorConfig_t) * this->nrSensors);
     if(this->sensorConfigSettings == NULL){
@@ -488,3 +546,38 @@ bool NonVolatileConfig::readSensorConfig(void){
     return true;
 }
 
+bool NonVolatileConfig::storeLoraSettings(void){
+    uint16_t baseOffset = LORA_SETTINGS_OFFSET;
+    EEPROM.write(baseOffset++, this->loraSettings.dataAccumulation);
+    EEPROM.write(baseOffset++, this->loraSettings.adrOn);
+    // copy eui
+    for(uint8_t i=0; i<EUI_LENGTH; i++){
+        EEPROM.write(baseOffset++, this->loraSettings.devEUI[i]);
+    }
+    // copy key
+    for(uint8_t i=0; i<KEY_LENGTH; i++){
+        EEPROM.write(baseOffset++, this->loraSettings.appKey[i]);
+    }
+    if(baseOffset>SENSOR_CONFIG_START_OFFSET){
+        return false;
+    }
+    return true;
+}
+
+bool NonVolatileConfig::readLoraSettings(void){
+    uint16_t baseOffset = LORA_SETTINGS_OFFSET;
+    this->loraSettings.dataAccumulation = EEPROM.read(baseOffset++);
+    this->loraSettings.adrOn = EEPROM.read(baseOffset++);
+    for(uint8_t i=0; i<EUI_LENGTH; i++){
+        this->loraSettings.devEUI[i] = EEPROM.read(baseOffset++);
+    }
+    this->loraSettings.devEUI[EUI_LENGTH] = '\0';
+    for(uint8_t i=0; i<KEY_LENGTH; i++){
+        this->loraSettings.appKey[i] = EEPROM.read(baseOffset++);
+    }
+    this->loraSettings.appKey[KEY_LENGTH] = '\0';
+    if(baseOffset>SENSOR_CONFIG_START_OFFSET){
+        return false;
+    }
+    return true;
+}

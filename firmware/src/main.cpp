@@ -6,14 +6,15 @@
 #include "DebugSerial.h"
 #include "Adafruit_SleepyDog.h"
 
-NodeManager nm(MOTHERBOARD_ID);
+NodeManager nm;
 LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
 
 uint8_t buf[LORA_MAX_PAYLOAD_SIZE];
 
-void flashLed(void);
-
 void setup(){
+#ifdef SERIAL_DEBUG_OUTPUT
+  delay(5000);
+#endif
   // start serial interface for printing debug messages
   DEBUG.begin();
 
@@ -26,11 +27,17 @@ void setup(){
   };
 
   // USB Serial for configuration
-  SerialAT.begin(115200); 
-  
+  SerialAT.begin(115200);
+
+  // start the node manager
+  nm.begin();
+  // if skipConfig is true, sensors will be configured with a previously stored configuration
+  nm.runConfigMode(skipConfig); // run config
+
+  nm.getLoraSettings(&settings);
+
   // configure lora (no networking yet)
   lora.begin(settings);
-  flashLed();
 
   // join lora network
   lora.join();
@@ -38,10 +45,8 @@ void setup(){
   // put lora modem in sleep (save energy)
   lora.sleep(); // saves approx. 2.5 mA
 
-  // start the node manager
-  nm.begin();
-  // if skipConfig is true, sensors will be configured with a previously stored configuration
-  nm.runConfigMode(skipConfig); // run config
+  // start rtc
+  nm.start();
 }
 
 void loop() {
@@ -77,14 +82,4 @@ void loop() {
   }
 
   nm.sleep();
-}
-
-void flashLed(void){
-  lora.ledOn();
-  delay(200);
-  lora.ledOff();
-  delay(100);
-  lora.ledOn();
-  delay(200);
-  lora.ledOff();
 }

@@ -134,7 +134,7 @@ class rn2xx3
      * they will be used. Otherwise the join will fail and this function
      * will return false.
      */
-    bool initOTAA(const String& AppEUI="", const String& AppKey="", const String& DevEUI="");
+    bool initOTAA(const String& AppEUI="", const String& AppKey="", const String& DevEUI="", int dr=1, bool enableADR=false);
 
     /*
      * Initialise the RN2xx3 and join a network using over the air activation,
@@ -145,7 +145,7 @@ class rn2xx3
      * AppKey: Application key as a uint8_t buffer
      * DevEui: Device EUI as a uint8_t buffer (optional - set to 0 to use Hardware EUI)
      */
-     bool initOTAA(uint8_t * AppEUI, uint8_t * AppKey, uint8_t * DevEui);
+     bool initOTAA(uint8_t * AppEUI, uint8_t * AppKey, uint8_t * DevEui, int dr, bool enableADR);
 
     /*
      * Transmit the provided data. The data is hex-encoded by this library,

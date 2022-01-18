@@ -153,8 +153,7 @@ bool rn2xx3::init()
   }
 }
 
-
-bool rn2xx3::initOTAA(const String& AppEUI, const String& AppKey, const String& DevEUI)
+bool rn2xx3::initOTAA(const String& AppEUI, const String& AppKey, const String& DevEUI, int dr, bool enableADR)
 {
   _otaa = true;
   _nwkskey = "0";
@@ -225,7 +224,8 @@ bool rn2xx3::initOTAA(const String& AppEUI, const String& AppKey, const String& 
   // TTN does not yet support Adaptive Data Rate.
   // Using it is also only necessary in limited situations.
   // Therefore disable it by default.
-  //setAdaptiveDataRate(false);
+  setAdaptiveDataRate(enableADR);
+  setDR(dr);
 
   // Switch off automatic replies, because this library can not
   // handle more than one mac_rx per tx. See RN2483 datasheet,
@@ -268,7 +268,7 @@ bool rn2xx3::initOTAA(const String& AppEUI, const String& AppKey, const String& 
 }
 
 
-bool rn2xx3::initOTAA(uint8_t * AppEUI, uint8_t * AppKey, uint8_t * DevEUI)
+bool rn2xx3::initOTAA(uint8_t * AppEUI, uint8_t * AppKey, uint8_t * DevEUI, int dr, bool enableADR)
 {
   String app_eui;
   String dev_eui;
@@ -300,7 +300,7 @@ bool rn2xx3::initOTAA(uint8_t * AppEUI, uint8_t * AppKey, uint8_t * DevEUI)
     app_key += String (buff);
   }
 
-  return initOTAA(app_eui, app_key, dev_eui);
+  return initOTAA(app_eui, app_key, dev_eui, dr, enableADR);
 }
 
 bool rn2xx3::initABP(const String& devAddr, const String& AppSKey, const String& NwkSKey, int dr, bool enableADR)

@@ -28,6 +28,7 @@
 #include <Arduino.h>
 #include "NonVolatileConfig.h"
 #include "Sensor.h"
+#include "LoRaWAN.h"
 #include "device_settings.h"
 
 // CONFIG_DURATION_MS defines how long the motherboard will listen for
@@ -91,7 +92,7 @@
 #warning "LORA_ACCUMULATE_TRESHOLD was not defined. Using default setting."
 #endif
 
-#define AT_COMMAND_MAX_SIZE             32
+#define AT_COMMAND_MAX_SIZE             48
 
 #define SerialAT SerialUSB
 
@@ -100,14 +101,15 @@ typedef enum errorCodes{
     AT_INVALID_ID = 1,
     AT_INVALID_POL = 2,
     AT_WRONG_VALUE = 3,
-    AT_WRONG_COMMAND = 4
+    AT_WRONG_COMMAND = 4,
+    AT_WRONG_ARG_LENGTH = 5
 } AT_ErrorCodes_t;
 
 class NodeManager{
 
 public:
     // constructor - id is unique identifier for the motherboard
-    NodeManager(uint16_t id);
+    NodeManager();
 
     // setup operation
     //  - scans connected sensors
@@ -126,7 +128,11 @@ public:
     uint8_t getLoraPayload(uint8_t * sendBuffer, uint8_t bufferSize);
     bool dataAccumulationEnabled(void);
 
+    void start(void);
+
     bool watchdogReset(void);
+
+    void getLoraSettings(LoRaSettings_t *settings);
 
 private:
     bool processAtCommands(void);
@@ -142,7 +148,6 @@ private:
 
     // motherboard id
     uint16_t id;    // as 16-bit unsigned integer
-    char idStr[5];  // as string (4-digit hex)
 
     // connected sensors
     uint8_t nrSensors;

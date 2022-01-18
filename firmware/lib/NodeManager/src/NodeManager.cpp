@@ -128,10 +128,7 @@ void DUMP_EEPROM(int size){
 }
 
 // constructor
-NodeManager::NodeManager(uint16_t id){
-    this->id = id;
-    sprintf(this->idStr, "%04X", id);
-
+NodeManager::NodeManager(){
     memset(this->atCommand, '\0', AT_COMMAND_MAX_SIZE);
     this->atFill = 0;
     this->commandReceived = false;
@@ -151,6 +148,11 @@ NodeManager::NodeManager(uint16_t id){
     LowPower.setRtcTime(0);
 }
 
+void NodeManager::getLoraSettings(LoRaSettings_t *settings){
+    this->nvConfig->getAppKey(settings->applicationKey);
+    this->nvConfig->getDevEUI(settings->deviceEUI);
+}
+
 void NodeManager::begin(void){
     DEBUG.println(F("Initializing NodeManager..."));
 
@@ -164,7 +166,7 @@ void NodeManager::begin(void){
     // 2. Initialize I2C bus
     delay(500);
     Wire.begin();
-    Wire.setClock(100000);
+    Wire.setClock(20000);
 
     // 3. Build a sensor list (i.e. list of Sensor objects for interfacing with the sensor boards)
     uint8_t detectedSensors[MAX_NR_OF_SENSORS];
@@ -335,12 +337,6 @@ void NodeManager::runConfigMode(bool skip){
     this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
     delete this->nvConfig;
 
-    DEBUG.println(F("Attach RTC callback."));
-    LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
-
-    DEBUG.println(F("Updating status message."));
-    this->initStatusMessage();
-
     DEBUG.println(F("Exit config mode."));
     delay(10);
 }
@@ -384,6 +380,14 @@ void NodeManager::loop(void){
 
     DEBUG.println(F("End of NodeManager loop() -> feeding the watchdog"));
     Watchdog.reset();
+}
+
+void NodeManager::start(void){
+    DEBUG.println(F("Attach RTC callback."));
+    LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
+
+    DEBUG.println(F("Updating status message."));
+    this->initStatusMessage();
 }
 
 bool NodeManager::watchdogReset(void){
@@ -626,7 +630,39 @@ bool NodeManager::processAtCommands(void){
             // Ping motherboard
             if(strstr(specific, "PNG?")){
                 SerialAT.print("+PNG: ");
-                SerialAT.println(this->idStr);
+                SerialAT.println(IWAST_VERSION);
+                commandProcessed = true;
+            }
+
+            // Get sensor data accumulation 
+            if(strstr(specific, "ACC?")){
+                SerialAT.print("+ACC: ");
+                SerialAT.println(this->nvConfig->getDataAccumulation());
+                commandProcessed = true;
+            }
+
+                        // Get sensor data accumulation 
+            if(strstr(specific, "ADR?")){
+                SerialAT.print("+ADR: ");
+                SerialAT.println(this->nvConfig->getADR());
+                commandProcessed = true;
+            }
+
+            // Get LoRa Dev. EUI
+            if(strstr(specific, "EUI?")){
+                SerialAT.print("+EUI: ");
+                char eui[EUI_LENGTH+1];
+                this->nvConfig->getDevEUI(eui);
+                SerialAT.println(eui);
+                commandProcessed = true;
+            }
+
+            // Get LoRa Application KEY
+            if(strstr(specific, "APK?")){
+                SerialAT.print("+APK: ");
+                char key[KEY_LENGTH+1];
+                this->nvConfig->getAppKey(key);
+                SerialAT.println(key);
                 commandProcessed = true;
             }
 
@@ -812,22 +848,64 @@ bool NodeManager::processAtCommands(void){
                 }
             }
 
-            // Set sensor data accumulation 
+            // Set lora data accumulation 
             if(strstr(specific, "ACC=")){
                 char * argStr = specific + 4;
-                uint8_t yesNo = strtol(argStr, NULL, 16); // sensor are identified by their i2c address
+                uint8_t yesNo = strtol(argStr, NULL, 16);
 
-                this->nvConfig->setDataAccumulation(yesNo);
-                SerialAT.println("OK");
+                if((yesNo==0) || (yesNo==1)){
+                    this->nvConfig->setDataAccumulation(yesNo);
+                    SerialAT.println("OK");
+                    commandProcessed = true;
+                }
+                else{
+                    errorCode = AT_WRONG_VALUE;
+                }
+            }
+
+            // Set lora ADR 
+            if(strstr(specific, "ADR=")){
+                char * argStr = specific + 4;
+                uint8_t adrOn = strtol(argStr, NULL, 16);
+
+                if((adrOn==0) || (adrOn==1)){
+                    this->nvConfig->setADR(adrOn);
+                    SerialAT.println("OK");
+                    commandProcessed = true;
+                }
+                else{
+                    errorCode = AT_WRONG_VALUE;
+                }
+            }
+
+            // Set lora Dev. EUI 
+            if(strstr(specific, "EUI=")){
+                char * argStr = specific + 4;
+                if(strlen(argStr)!=(EUI_LENGTH+1)){ // carriage return included
+                    errorCode = AT_WRONG_ARG_LENGTH;
+                }
+                else{
+                    argStr[EUI_LENGTH] = '\0'; // null terminator
+                    this->nvConfig->setDevEUI(argStr);
+                    // set id based on last digits of eui
+                    this->id = strtol(argStr+12, NULL, 16);
+
+                    SerialAT.println("OK");
+                }
                 commandProcessed = true;
             }
 
-            // Get sensor data accumulation 
-            if(strstr(specific, "ACC?")){
-                SerialAT.print("+ACC: ");
-                SerialAT.println(this->nvConfig->getDataAccumulation());
-
-                SerialAT.println("OK");
+            // Set lora application key
+            if(strstr(specific, "APK=")){
+                char * argStr = specific + 4;
+                if(strlen(argStr)!=(KEY_LENGTH+1)){ // carriage return included
+                    errorCode = AT_WRONG_ARG_LENGTH;
+                }
+                else{
+                    argStr[KEY_LENGTH] = '\0'; // null terminator
+                    this->nvConfig->setAppKey(argStr);
+                    SerialAT.println("OK");
+                }
                 commandProcessed = true;
             }
 

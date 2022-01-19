@@ -34,7 +34,7 @@
     // first byte is DATA_ACCUMULATION
     #define ADR_ON_OFFSET                   1
     #define UID_OFFSET                      2
-    #define APP_KEY_OFFSET                  19
+    #define APP_KEY_OFFSET                  18
     
 #define SENSOR_CONFIG_START_OFFSET          (LORA_SETTINGS_OFFSET+LORA_SETTINGS_SIZE) // first to bytes point to next sensor config
 // following offsets are relative to sensor config start offset
@@ -283,11 +283,8 @@ void NonVolatileConfig::storeSensorConfig(void){
 
 void NonVolatileConfig::printSensorConfig(void){
     DEBUG.println(F("Lora settings:"));
-    DEBUG.print(F("Dev. EUI: 0x"));
-    for(uint8_t i=0; i<EUI_LENGTH; i++){
-        DEBUG.print(this->loraSettings.devEUI[i]);
-    }
-    DEBUG.println();
+    DEBUG.print(F("Dev. EUI: "));
+    DEBUG.println(this->loraSettings.devEUI);
 
     DEBUG.print(F(" - data accumultation: "));
     if(this->loraSettings.dataAccumulation){
@@ -303,11 +300,8 @@ void NonVolatileConfig::printSensorConfig(void){
     else{
         DEBUG.println("OFF");
     }
-    DEBUG.print(F(" - App. Key: 0x"));
-    for(uint8_t i=0; i<KEY_LENGTH; i++){
-        DEBUG.print(this->loraSettings.appKey[i]);
-    }
-    DEBUG.println();
+    DEBUG.print(F(" - App. Key: "));
+    DEBUG.println(this->loraSettings.appKey);
 
     DEBUG.print(F("Nr sensors: "));
     DEBUG.println(this->nrSensors);

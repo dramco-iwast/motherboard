@@ -151,6 +151,7 @@ NodeManager::NodeManager(){
 void NodeManager::getLoraSettings(LoRaSettings_t *settings){
     this->nvConfig->getAppKey(settings->applicationKey);
     this->nvConfig->getDevEUI(settings->deviceEUI);
+    settings->enableADR = (this->nvConfig->getADR() != 0);
 }
 
 void NodeManager::begin(void){
@@ -316,7 +317,7 @@ void NodeManager::runConfigMode(bool skip){
     delay(1000);
 	USBDevice.detach();
     USBDevice.end();
-
+    
     if(this->configUpdated){
         DEBUG.println(F("Using configuration:"));
         this->nvConfig->storeSensorConfig();
@@ -335,10 +336,9 @@ void NodeManager::runConfigMode(bool skip){
         delay(100); // watchdog reset will occur here
     }
     this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
-    delete this->nvConfig;
 
     DEBUG.println(F("Exit config mode."));
-    delay(10);
+    delay(100);
 }
 
 void NodeManager::loop(void){
@@ -383,6 +383,9 @@ void NodeManager::loop(void){
 }
 
 void NodeManager::start(void){
+    DEBUG.println(F("Freeing up some RAM"));
+    delete this->nvConfig;
+
     DEBUG.println(F("Attach RTC callback."));
     LowPower.attachInterruptWakeup(RTC_ALARM_WAKEUP, rtcCallback, CHANGE);
 

@@ -44,7 +44,7 @@ void DebugSerial::begin(unsigned long baud){
 
 void DebugSerial::flush(){
 #ifdef SERIAL_DEBUG_OUTPUT
-    _dbSerialSercom4.flush();
+    if(_dbSerialSercom4.available()) _dbSerialSercom4.flush();
 #endif
 }
 

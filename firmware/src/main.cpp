@@ -34,6 +34,7 @@ void setup(){
   // if skipConfig is true, sensors will be configured with a previously stored configuration
   nm.runConfigMode(skipConfig); // run config
 
+  // get device specific settings
   nm.getLoraSettings(&settings);
 
   // configure lora (no networking yet)

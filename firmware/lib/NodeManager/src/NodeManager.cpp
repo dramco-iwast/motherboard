@@ -25,7 +25,9 @@
 #include <FlashAsEEPROM.h>
 #include <Wire.h>
 #include <ArduinoLowPower.h>
+#ifndef NO_WATCHDOG
 #include <Adafruit_SleepyDog.h>
+#endif
 #include "NodeManager.h"
 #include "DebugSerial.h"
 
@@ -314,9 +316,9 @@ void NodeManager::runConfigMode(bool skip){
     // Next step is to store config settings, clean up and start normal operation.
     DEBUG.println(F("Disconnecting USB ..."));
     SerialAT.end();
-    delay(1000);
-	USBDevice.detach();
-    USBDevice.end();
+    if(SerialAT.available()) SerialAT.flush();
+	//USBDevice.detach();
+    //USBDevice.end();
     
     if(this->configUpdated){
         DEBUG.println(F("Using configuration:"));
@@ -330,10 +332,14 @@ void NodeManager::runConfigMode(bool skip){
 
     DEBUG.println(F("Configuring connected sensors ..."));
     if(!this->configureSensors()){
-        DEBUG.println("CONFIG MISMATCH - SYSTEM RESET");
+#ifndef NO_WATCHDOG
+        DEBUG.println(F("CONFIG MISMATCH - SYSTEM RESET"));
         DEBUG.flush();
         Watchdog.enable(10);
         delay(100); // watchdog reset will occur here
+#else
+        DEBUG.println(F("CONFIG MISMATCH - Proceeding anyway"));
+#endif
     }
     this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
 
@@ -343,8 +349,10 @@ void NodeManager::runConfigMode(bool skip){
 
 void NodeManager::loop(void){
     // we are awake
+#ifndef NO_WATCHDOG
     Watchdog.reset();
     Watchdog.enable(10000);
+#endif
 
     // stuff to do on rtc wake-up
     if(rtcWakeUp){
@@ -378,8 +386,12 @@ void NodeManager::loop(void){
         this->getSensorData();
     }
 
+#ifndef NO_WATCHDOG
     DEBUG.println(F("End of NodeManager loop() -> feeding the watchdog"));
     Watchdog.reset();
+#else
+    DEBUG.println(F("End of NodeManager loop()"));
+#endif
 }
 
 void NodeManager::start(void){
@@ -394,11 +406,13 @@ void NodeManager::start(void){
 }
 
 bool NodeManager::watchdogReset(void){
+#ifndef NO_WATCHDOG
     if(Watchdog.resetCause() & PM_RCAUSE_WDT){
         DEBUG.println(F("Watchdog reset happend."));
         Wire.end(); // needed? and should it be here?
         return true;
     }
+#endif
     return false;
 }
 
@@ -428,9 +442,11 @@ void NodeManager::sleep(void){
     DEBUG.print(timeSinceLastRtcWakeup);
     DEBUG.println(F(" s."));
 
+#ifndef NO_WATCHDOG
     DEBUG.println(F("Watchdog will fire in 16 s."));
     Watchdog.reset();
     Watchdog.enable(16000);
+#endif
 
     int sleepFor = POLL_WAKEUP_INTERVAL;
     if(eventHandled){

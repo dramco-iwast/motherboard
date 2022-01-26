@@ -4,19 +4,40 @@
 #include "LoRaWAN.h"
 #include "device_settings.h"
 #include "DebugSerial.h"
+#ifndef NO_WATCHDOG
 #include "Adafruit_SleepyDog.h"
+#endif
+
+//#include <ArduinoLowPower.h>
 
 NodeManager nm;
 LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
 
 uint8_t buf[LORA_MAX_PAYLOAD_SIZE];
 
+
 void setup(){
+/*// Low power test 
+  SerialUSB.begin(115200);
+  while(!SerialUSB);
+
+  SerialUSB.println("Low Power Test");
+  SerialUSB.flush();
+  delay(1000);
+  SerialUSB.end();
+  USBDevice.end();
+  USBDevice.detach();
+
+  LowPower.sleep();
+
+  while(1);
+*/
 #ifdef SERIAL_DEBUG_OUTPUT
   delay(5000);
 #endif
   // start serial interface for printing debug messages
   DEBUG.begin();
+  DEBUG.println(F("DEBUG OUTPUT ENABLED."));
 
   // check if watchodog was the cause of reset
   // TODO: check effect on power consumption
@@ -31,6 +52,7 @@ void setup(){
 
   // start the node manager
   nm.begin();
+
   // if skipConfig is true, sensors will be configured with a previously stored configuration
   nm.runConfigMode(skipConfig); // run config
 
@@ -73,7 +95,9 @@ void loop() {
 
       // send the data
       lora.wake();
+#ifndef NO_WATCHDOG
       Watchdog.reset();
+#endif
       lora.sendData(buf, pSize, (isStatus && CONFIRMED_MESSAGES_ALLOWED));
       lora.sleep();
     }

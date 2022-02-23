@@ -15,6 +15,30 @@ LoRaSettings_t settings = LORA_INIT_MY_DEVICE;
 
 uint8_t buf[LORA_MAX_PAYLOAD_SIZE];
 
+typedef enum ledmodes{ON, OFF, TOGGLE} LedModes_t;
+#define BOARD_LED 11
+
+void led(LedModes_t mode)
+{
+  #ifdef BOARD_V1
+    uint8_t on = 1;
+  #else 
+    uint8_t on = 0;
+  #endif
+
+  switch(mode){
+    case ON:{
+      digitalWrite(BOARD_LED, on);
+    } break;
+    case OFF:{
+      digitalWrite(BOARD_LED, !on);
+    }
+    break;
+    default:{
+      digitalWrite(BOARD_LED, !digitalRead(BOARD_LED));
+    }
+  }
+}
 
 void setup(){
 /*// Low power test 
@@ -32,8 +56,12 @@ void setup(){
 
   while(1);
 */
+pinMode(BOARD_LED, OUTPUT);
+led(ON);
+delay(100);
+led(OFF);
 #ifdef SERIAL_DEBUG_OUTPUT
-  delay(5000);
+    delay(5000);
 #endif
   // start serial interface for printing debug messages
   DEBUG.begin();

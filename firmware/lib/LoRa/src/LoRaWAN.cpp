@@ -32,11 +32,11 @@ LoRaWAN::LoRaWAN(void){
 /* Initialize LoRaWAN modem according to LoRaSettings_t s.
  * This will only intialize the hardware. No communication yet.
  */
-void LoRaWAN::begin(LoRaSettings_t s, bool ledMode){
+void LoRaWAN::begin(LoRaSettings_t s, void* ledFunc){
     this->_ledMode = ledMode;
 
     // configure "lora communication indicator" led pin to output
-    pinMode(LORA_LED, OUTPUT);
+    
     // "lora communication indicator" led off
     this->ledOff();
 
@@ -180,7 +180,7 @@ void LoRaWAN::wake(){
 }
 
 void LoRaWAN::ledOn(void){
-    digitalWrite(LORA_LED, this->_ledMode);
+    this->_ledFunc(LED_ON);
 }
 
 void LoRaWAN::ledOff(void){

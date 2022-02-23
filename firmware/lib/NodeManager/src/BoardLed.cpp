@@ -14,7 +14,13 @@ void BoardLed::init(void){
     this->BoardLed_Action(OFF);
 }
 
-void BoardLed::BoardLed_Action(LedAction_t mode){
+/**
+ * @brief turn led on/off or flash a couple of times
+ * 
+ * @param mode 
+ * @param times 
+ */
+void BoardLed::BoardLed_Action(LedAction_t mode, uint8_t times){
   switch(mode){
     case ON:{
         digitalWrite(this->_pin, this->_onVal);
@@ -27,8 +33,12 @@ void BoardLed::BoardLed_Action(LedAction_t mode){
         digitalWrite(this->_pin, !digitalRead(this->_pin));
     } break;
     case FLASH:{
-        digitalWrite(this->_pin, this->_onVal);
-        delay(100);
+        for(uint8_t i=0;i<times;i++){
+            digitalWrite(this->_pin, this->_onVal);
+            delay(100);
+            digitalWrite(this->_pin, !this->_onVal);
+            delay(100);
+        }
         digitalWrite(this->_pin, !this->_onVal);
     } break;
     default:{

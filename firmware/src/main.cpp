@@ -33,7 +33,7 @@ void setup(){
   while(1);
 */
   led.init();
-  led.BoardLed_Action(FLASH);
+  led.BoardLed_Action(FLASH, 5);
 
 #ifdef SERIAL_DEBUG_OUTPUT
     delay(5000);

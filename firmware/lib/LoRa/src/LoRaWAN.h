@@ -25,6 +25,7 @@
 
 #include <Arduino.h>
 #include "rn2xx3.h"
+#include "BoardLed.h"
 
 #define LORA_UNCONFIMED				false
 #define LORA_CONFIRMED				true
@@ -77,7 +78,7 @@ class LoRaWAN{
 		 * This will only intialize the hardware. No communication yet.
 		 * ledFunc 
 		 */
-		void begin(LoRaSettings_t s, void* ledFunc);
+		void begin(LoRaSettings_t s, BoardLed * ledPtr);
 
 		/* Join a LoRaWAN network (ABP only)
 		 * LoRaWAN::begin() needs to be called first.
@@ -106,7 +107,7 @@ class LoRaWAN{
 		LoRaSettings_t settings;
 
 		rn2xx3 * modem;
-		bool _ledMode;
+		BoardLed * _ledPtr;
 };
 
 extern LoRaWAN lora;

@@ -13,7 +13,7 @@ public:
     BoardLed(uint8_t pin=BOARD_LED_PIN);
     
     void init(void);
-    void BoardLed_Action(LedAction_t action);
+    void BoardLed_Action(LedAction_t action, uint8_t times = 1);
 
 private:
     uint8_t _pin;

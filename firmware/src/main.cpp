@@ -61,6 +61,9 @@ void setup(){
 
   // get device specific settings
   nm.getLoraSettings(&settings);
+#if (ENABLE_ADR && CONFIRMED_MESSAGES_ALLOWED) == true
+  settings.enableADR = true;
+#endif
 
   // configure lora (no networking yet)
   lora.begin(settings, &led);

@@ -343,6 +343,13 @@ void NodeManager::runConfigMode(bool skip){
     }
     this->doDataAccumulation = (this->nvConfig->getDataAccumulation() != 0);
 
+    // Set board id based on device EUI
+    char temp[LORA_EUI_LENGTH+1];
+    this->nvConfig->getDevEUI(temp);
+    this->id = (uint16_t)strtol(temp, NULL, 16);
+
+    DEBUG.print(F("Board ID: 0x"));
+    DEBUG.println(this->id, HEX);
     DEBUG.println(F("Exit config mode."));
     delay(100);
 }
@@ -906,8 +913,6 @@ bool NodeManager::processAtCommands(void){
                 else{
                     argStr[EUI_LENGTH] = '\0'; // null terminator
                     this->nvConfig->setDevEUI(argStr);
-                    // set id based on last digits of eui
-                    this->id = strtol(argStr+12, NULL, 16);
 
                     SerialAT.println("OK");
                 }

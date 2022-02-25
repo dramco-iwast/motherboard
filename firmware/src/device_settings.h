@@ -68,7 +68,7 @@
 /* 64-bit device ID */
 #define LORAWAN_DEVICE_EUI			"4957415354200000" // last two bytes are set by the configurator tool
 /* 64-bit application ID */
-#define LORAWAN_APPLICATION_EUI     "4957415354444556" // fixed
+#define LORAWAN_APPLICATION_EUI 	"4957415354415050" // fixed // dev: 4957415354444556
 /* 128-bit AES key */
 #define LORAWAN_APPLICATION_KEY     "00000000000000000000000000000000" // key is set by the configurator tool
 // Don't change

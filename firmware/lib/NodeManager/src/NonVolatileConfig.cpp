@@ -54,7 +54,12 @@ NonVolatileConfig::NonVolatileConfig(void){
     this->sensorConfigSettings = NULL;
     this->nrSensors = 0;
     this->loraSettings.dataAccumulation = 0;
+#if (ENABLE_ADR && CONFIRMED_MESSAGES_ALLOWED) == true
+    this->loraSettings.adrOn = 1;
+#else
     this->loraSettings.adrOn = 0;
+#endif
+    
 }
 
 NonVolatileConfig::~NonVolatileConfig(){

@@ -169,7 +169,7 @@ void NodeManager::begin(void){
     // 2. Initialize I2C bus
     delay(500);
     Wire.begin();
-    Wire.setClock(20000);
+    //Wire.setClock(20000); // seems to result in clk freq. of approx. 130 kHz
 
     // 3. Build a sensor list (i.e. list of Sensor objects for interfacing with the sensor boards)
     uint8_t detectedSensors[MAX_NR_OF_SENSORS];
